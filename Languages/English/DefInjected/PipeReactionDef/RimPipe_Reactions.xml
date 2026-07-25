@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<LanguageData>
+
+  <RimPipe_Reaction_LoxRp1.label>LOX/RP-1 combustion (demo)</RimPipe_Reaction_LoxRp1.label>
+  <RimPipe_Reaction_LoxRp1.description>Chem-C acceptance recipe: consume LOX and RP-1 by oxidizer/fuel ratio, produce test exhaust. mixRatio=LOX/RP-1.</RimPipe_Reaction_LoxRp1.description>
+
+</LanguageData>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Defs>
+  <RimPipe.FluidDef>
+    <defName>RimPipe_Fluid_TestWater</defName>
+    <label>测试水</label>
+    <description>测试用液体。泄漏时只扣量，不产生脏污，也不升温。</description>
+    <leakEffects>
+      <li>None</li>
+    </leakEffects>
+  </RimPipe.FluidDef>
+</Defs>

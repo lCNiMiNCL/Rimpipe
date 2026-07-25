@@ -1,0 +1,425 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Defs>
+
+  <!-- Dev 验收建筑。不进建造栏。 -->
+
+  <ThingDef ParentName="BuildingBase">
+    <defName>RimPipe_Dev_Tank</defName>
+    <label>rimpipe 测试储罐</label>
+    <description>验收用储罐。四面端口；管道铺在端口邻格。</description>
+    <thingClass>Building</thingClass>
+    <category>Building</category>
+    <graphicData>
+      <texPath>Things/Building/Linked/PowerConduit_MenuIcon</texPath>
+      <graphicClass>Graphic_Single</graphicClass>
+      <drawSize>(1,1)</drawSize>
+    </graphicData>
+    <uiIconPath>Things/Building/Linked/PowerConduit_MenuIcon</uiIconPath>
+    <altitudeLayer>Building</altitudeLayer>
+    <passability>PassThroughOnly</passability>
+    <pathCost>50</pathCost>
+    <fillPercent>0.4</fillPercent>
+    <rotatable>true</rotatable>
+    <statBases>
+      <MaxHitPoints>100</MaxHitPoints>
+      <WorkToBuild>10</WorkToBuild>
+      <Flammability>0.5</Flammability>
+    </statBases>
+    <size>(1,1)</size>
+    <costList>
+      <Steel>1</Steel>
+    </costList>
+    <building>
+      <isInert>true</isInert>
+    </building>
+    <comps>
+      <li Class="RimPipe.CompProperties_PipeNetworkMember">
+        <defaultMaxFlowRate>10</defaultMaxFlowRate>
+        <!-- Amb-A：Dev 罐无保温，与产品储罐 0.7 对比 -->
+        <insulation>0</insulation>
+        <maxAmbientHeatRate>10</maxAmbientHeatRate>
+        <containers>
+          <li>
+            <capacity>100</capacity>
+            <fluidDefName>RimPipe_Fluid_TestWater</fluidDefName>
+            <initialAmount>0</initialAmount>
+          </li>
+        </containers>
+        <!-- 四向本地边：管道必须落在端口「外一格」才会建 Mapping -->
+        <ports>
+          <li>
+            <localRot>North</localRot>
+            <containerIndex>0</containerIndex>
+          </li>
+          <li>
+            <localRot>South</localRot>
+            <containerIndex>0</containerIndex>
+          </li>
+          <li>
+            <localRot>West</localRot>
+            <containerIndex>0</containerIndex>
+          </li>
+          <li>
+            <localRot>East</localRot>
+            <containerIndex>0</containerIndex>
+          </li>
+        </ports>
+      </li>
+      <li Class="RimPipe.CompProperties_PipeBreachable" />
+    </comps>
+    <!-- 不进建造菜单；仅 Debug / DefOf 回归用 -->
+    <uiOrder>1000</uiOrder>
+    <constructEffect>ConstructMetal</constructEffect>
+    <terrainAffordanceNeeded>Light</terrainAffordanceNeeded>
+  </ThingDef>
+
+  <!-- 压力验收大罐（不进建造栏）。 -->
+  <ThingDef ParentName="BuildingBase">
+    <defName>RimPipe_Dev_TankLarge</defName>
+    <label>rimpipe 测试大储罐</label>
+    <description>压力验收用大罐（容量 500）。仅 Debug，不进建造栏。</description>
+    <thingClass>Building</thingClass>
+    <category>Building</category>
+    <graphicData>
+      <texPath>Things/Building/Linked/PowerConduit_MenuIcon</texPath>
+      <graphicClass>Graphic_Single</graphicClass>
+      <drawSize>(1,1)</drawSize>
+    </graphicData>
+    <uiIconPath>Things/Building/Linked/PowerConduit_MenuIcon</uiIconPath>
+    <altitudeLayer>Building</altitudeLayer>
+    <passability>PassThroughOnly</passability>
+    <pathCost>50</pathCost>
+    <fillPercent>0.4</fillPercent>
+    <rotatable>true</rotatable>
+    <statBases>
+      <MaxHitPoints>100</MaxHitPoints>
+      <WorkToBuild>10</WorkToBuild>
+      <Flammability>0.5</Flammability>
+    </statBases>
+    <size>(1,1)</size>
+    <costList>
+      <Steel>1</Steel>
+    </costList>
+    <building>
+      <isInert>true</isInert>
+    </building>
+    <comps>
+      <li Class="RimPipe.CompProperties_PipeNetworkMember">
+        <defaultMaxFlowRate>10</defaultMaxFlowRate>
+        <containers>
+          <li>
+            <capacity>500</capacity>
+            <fluidDefName>RimPipe_Fluid_TestWater</fluidDefName>
+            <initialAmount>0</initialAmount>
+          </li>
+        </containers>
+        <ports>
+          <li>
+            <localRot>North</localRot>
+            <containerIndex>0</containerIndex>
+          </li>
+          <li>
+            <localRot>South</localRot>
+            <containerIndex>0</containerIndex>
+          </li>
+          <li>
+            <localRot>West</localRot>
+            <containerIndex>0</containerIndex>
+          </li>
+          <li>
+            <localRot>East</localRot>
+            <containerIndex>0</containerIndex>
+          </li>
+        </ports>
+      </li>
+      <li Class="RimPipe.CompProperties_PipeBreachable" />
+    </comps>
+    <uiOrder>1001</uiOrder>
+    <constructEffect>ConstructMetal</constructEffect>
+    <terrainAffordanceNeeded>Light</terrainAffordanceNeeded>
+  </ThingDef>
+
+  <!-- Tee: local North/West/East ports (missing South). -->
+  <ThingDef ParentName="BuildingBase">
+    <defName>RimPipe_Dev_Tee</defName>
+    <label>rimpipe 测试三通</label>
+    <description>验收用三通。北/西/东三口，无南口。</description>
+    <thingClass>Building</thingClass>
+    <category>Building</category>
+    <graphicData>
+      <texPath>Things/Building/Linked/PowerConduit_MenuIcon</texPath>
+      <graphicClass>Graphic_Single</graphicClass>
+      <drawSize>(1,1)</drawSize>
+    </graphicData>
+    <uiIconPath>Things/Building/Linked/PowerConduit_MenuIcon</uiIconPath>
+    <altitudeLayer>Building</altitudeLayer>
+    <passability>PassThroughOnly</passability>
+    <pathCost>50</pathCost>
+    <fillPercent>0.4</fillPercent>
+    <rotatable>true</rotatable>
+    <statBases>
+      <MaxHitPoints>100</MaxHitPoints>
+      <WorkToBuild>10</WorkToBuild>
+      <Flammability>0.5</Flammability>
+    </statBases>
+    <size>(1,1)</size>
+    <costList>
+      <Steel>1</Steel>
+    </costList>
+    <building>
+      <isInert>true</isInert>
+    </building>
+    <comps>
+      <li Class="RimPipe.CompProperties_PipeNetworkMember">
+        <defaultMaxFlowRate>10</defaultMaxFlowRate>
+        <containers>
+          <li>
+            <capacity>50</capacity>
+            <fluidDefName>RimPipe_Fluid_TestWater</fluidDefName>
+            <initialAmount>0</initialAmount>
+          </li>
+        </containers>
+        <ports>
+          <li>
+            <localRot>North</localRot>
+            <containerIndex>0</containerIndex>
+          </li>
+          <li>
+            <localRot>West</localRot>
+            <containerIndex>0</containerIndex>
+          </li>
+          <li>
+            <localRot>East</localRot>
+            <containerIndex>0</containerIndex>
+          </li>
+        </ports>
+      </li>
+    </comps>
+    <!-- 不进建造菜单；仅 Debug / DefOf 回归用 -->
+    <uiOrder>1010</uiOrder>
+    <constructEffect>ConstructMetal</constructEffect>
+    <terrainAffordanceNeeded>Light</terrainAffordanceNeeded>
+  </ThingDef>
+
+  <ThingDef ParentName="BuildingBase">
+    <defName>RimPipe_Dev_Pipe</defName>
+    <label>rimpipe 测试管道</label>
+    <description>验收用管道格。只负责连通，本身不存液。</description>
+    <thingClass>RimPipe.Building_PipeCell</thingClass>
+    <category>Building</category>
+    <graphicData>
+      <!-- 必须带 linkType，否则 Atlas 会被当成单张整图标，显示错误 -->
+      <texPath>Things/Building/Linked/PowerConduit_Atlas</texPath>
+      <graphicClass>Graphic_Single</graphicClass>
+      <linkType>Basic</linkType>
+      <linkFlags>
+        <!-- Custom1：管道互连；不用 PowerConduit，避免与原版电线视觉粘连 -->
+        <li>Custom1</li>
+      </linkFlags>
+      <damageData>
+        <rect>(0,0.35,1,0.3)</rect>
+      </damageData>
+    </graphicData>
+    <uiIconPath>Things/Building/Linked/PowerConduit_MenuIcon</uiIconPath>
+    <uiIconScale>0.7</uiIconScale>
+    <building>
+      <isInert>true</isInert>
+      <isEdifice>false</isEdifice>
+      <ai_chillDestination>false</ai_chillDestination>
+      <blueprintGraphicData>
+        <texPath>Things/Building/Linked/PowerConduit_Blueprint_Atlas</texPath>
+      </blueprintGraphicData>
+      <canConstructInCorner>true</canConstructInCorner>
+    </building>
+    <drawerType>MapMeshOnly</drawerType>
+    <altitudeLayer>Conduits</altitudeLayer>
+    <passability>Standable</passability>
+    <leaveResourcesWhenKilled>false</leaveResourcesWhenKilled>
+    <resourcesFractionWhenDeconstructed>0</resourcesFractionWhenDeconstructed>
+    <statBases>
+      <MaxHitPoints>80</MaxHitPoints>
+      <WorkToBuild>10</WorkToBuild>
+      <Flammability>0.5</Flammability>
+      <Beauty>-2</Beauty>
+    </statBases>
+    <drawStyleCategory>Conduits</drawStyleCategory>
+    <costList>
+      <Steel>1</Steel>
+    </costList>
+    <comps>
+      <li Class="RimPipe.CompProperties_PipeCell" />
+    </comps>
+    <rotatable>false</rotatable>
+    <selectable>true</selectable>
+    <neverMultiSelect>true</neverMultiSelect>
+    <clearBuildingArea>false</clearBuildingArea>
+    <!-- 不进建造菜单；仅 Debug / DefOf 回归用 -->
+    <uiOrder>1020</uiOrder>
+    <constructEffect>ConstructMetal</constructEffect>
+    <terrainAffordanceNeeded>Light</terrainAffordanceNeeded>
+  </ThingDef>
+
+  <!-- ExtHook 验收：双腔内部桥（仅 Debug）。 -->
+  <ThingDef ParentName="BuildingBase">
+    <defName>RimPipe_Dev_InternalBridge</defName>
+    <label>rimpipe 测试内部桥</label>
+    <description>ExtHook 验收用双腔内部桥。仅 Debug，不进建造栏。</description>
+    <thingClass>Building</thingClass>
+    <category>Building</category>
+    <graphicData>
+      <texPath>Things/Building/Linked/PowerConduit_MenuIcon</texPath>
+      <graphicClass>Graphic_Single</graphicClass>
+      <drawSize>(1,1)</drawSize>
+    </graphicData>
+    <uiIconPath>Things/Building/Linked/PowerConduit_MenuIcon</uiIconPath>
+    <altitudeLayer>Building</altitudeLayer>
+    <passability>PassThroughOnly</passability>
+    <pathCost>50</pathCost>
+    <fillPercent>0.4</fillPercent>
+    <rotatable>true</rotatable>
+    <statBases>
+      <MaxHitPoints>100</MaxHitPoints>
+      <WorkToBuild>10</WorkToBuild>
+      <Flammability>0.5</Flammability>
+    </statBases>
+    <size>(1,1)</size>
+    <costList>
+      <Steel>1</Steel>
+    </costList>
+    <building>
+      <isInert>true</isInert>
+    </building>
+    <comps>
+      <li Class="RimPipe.CompProperties_PipeNetworkMember">
+        <defaultMaxFlowRate>10</defaultMaxFlowRate>
+        <containers>
+          <li>
+            <capacity>10</capacity>
+            <fluidDefName>RimPipe_Fluid_TestWater</fluidDefName>
+            <initialAmount>0</initialAmount>
+          </li>
+          <li>
+            <capacity>10</capacity>
+            <fluidDefName>RimPipe_Fluid_TestWater</fluidDefName>
+            <initialAmount>0</initialAmount>
+          </li>
+        </containers>
+        <ports>
+          <li>
+            <localRot>West</localRot>
+            <containerIndex>0</containerIndex>
+          </li>
+          <li>
+            <localRot>East</localRot>
+            <containerIndex>1</containerIndex>
+          </li>
+        </ports>
+      </li>
+      <li Class="RimPipe.CompProperties_PipeDevInternalBridge">
+        <baseMaxFlowRate>10</baseMaxFlowRate>
+        <containerIndexA>0</containerIndexA>
+        <containerIndexB>1</containerIndexB>
+      </li>
+    </comps>
+    <placeWorkers>
+      <li>RimPipe.PlaceWorker_RimPipeAppliance</li>
+    </placeWorkers>
+    <!-- 不进建造菜单；仅 Debug / DefOf -->
+    <uiOrder>1030</uiOrder>
+    <constructEffect>ConstructMetal</constructEffect>
+    <terrainAffordanceNeeded>Light</terrainAffordanceNeeded>
+  </ThingDef>
+
+  <!-- 化学验收：三腔反应釜（西=液氧 东=煤油 北=排气）。不进建造栏。 -->
+  <ThingDef ParentName="BuildingBase">
+    <defName>RimPipe_Dev_Reactor</defName>
+    <label>rimpipe 测试反应釜</label>
+    <description>化学验收用三腔反应釜（液氧+航天煤油→排气）。需开关与电力；不进建造栏。</description>
+    <thingClass>Building</thingClass>
+    <category>Building</category>
+    <graphicData>
+      <texPath>Things/Building/Misc/MoisturePump</texPath>
+      <graphicClass>Graphic_Single</graphicClass>
+      <drawSize>(1,1)</drawSize>
+    </graphicData>
+    <uiIconPath>Things/Building/Misc/MoisturePump</uiIconPath>
+    <altitudeLayer>Building</altitudeLayer>
+    <passability>PassThroughOnly</passability>
+    <pathCost>50</pathCost>
+    <fillPercent>0.4</fillPercent>
+    <rotatable>true</rotatable>
+    <tickerType>Normal</tickerType>
+    <statBases>
+      <MaxHitPoints>100</MaxHitPoints>
+      <WorkToBuild>10</WorkToBuild>
+      <Flammability>0.5</Flammability>
+    </statBases>
+    <size>(1,1)</size>
+    <costList>
+      <Steel>1</Steel>
+    </costList>
+    <building>
+      <isInert>true</isInert>
+    </building>
+    <comps>
+      <li Class="CompProperties_Power">
+        <compClass>CompPowerTrader</compClass>
+        <basePowerConsumption>50</basePowerConsumption>
+      </li>
+      <li Class="CompProperties_Flickable" />
+      <li Class="RimPipe.CompProperties_PipeNetworkMember">
+        <defaultMaxFlowRate>10</defaultMaxFlowRate>
+        <insulation>0.5</insulation>
+        <containers>
+          <li>
+            <capacity>100</capacity>
+            <fluidDefName>RimPipe_Fluid_LOX</fluidDefName>
+            <initialAmount>0</initialAmount>
+          </li>
+          <li>
+            <capacity>100</capacity>
+            <fluidDefName>RimPipe_Fluid_RP1</fluidDefName>
+            <initialAmount>0</initialAmount>
+          </li>
+          <li>
+            <capacity>100</capacity>
+            <fluidDefName>RimPipe_Fluid_TestExhaust</fluidDefName>
+            <initialAmount>0</initialAmount>
+          </li>
+        </containers>
+        <ports>
+          <li>
+            <localRot>West</localRot>
+            <containerIndex>0</containerIndex>
+          </li>
+          <li>
+            <localRot>East</localRot>
+            <containerIndex>1</containerIndex>
+          </li>
+          <li>
+            <localRot>North</localRot>
+            <containerIndex>2</containerIndex>
+          </li>
+        </ports>
+      </li>
+      <li Class="RimPipe.CompProperties_PipeReactor">
+        <reactionDefName>RimPipe_Reaction_LoxRp1</reactionDefName>
+        <inputContainerIndices>
+          <li>0</li>
+          <li>1</li>
+        </inputContainerIndices>
+        <outputContainerIndices>
+          <li>2</li>
+        </outputContainerIndices>
+      </li>
+      <li Class="RimPipe.CompProperties_PipeBreachable" />
+    </comps>
+    <placeWorkers>
+      <li>RimPipe.PlaceWorker_RimPipeAppliance</li>
+    </placeWorkers>
+    <uiOrder>1040</uiOrder>
+    <constructEffect>ConstructMetal</constructEffect>
+    <terrainAffordanceNeeded>Light</terrainAffordanceNeeded>
+  </ThingDef>
+
+</Defs>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<LanguageData>
+
+  <RimPipe_Fluid_TestWater.label>test water</RimPipe_Fluid_TestWater.label>
+  <RimPipe_Fluid_TestWater.description>RimPipe test water. Leak effects: None (amount destroyed only; no Filth / heat).</RimPipe_Fluid_TestWater.description>
+
+  <RimPipe_Fluid_TestFuel.label>test fuel</RimPipe_Fluid_TestFuel.label>
+  <RimPipe_Fluid_TestFuel.description>RimPipe acceptance fluid: leak destroys amount and spawns Filth_Fuel plus room heat (E-A).</RimPipe_Fluid_TestFuel.description>
+
+  <RimPipe_Fluid_LOX.label>liquid oxygen</RimPipe_Fluid_LOX.label>
+  <RimPipe_Fluid_LOX.description>RimPipe chem demo LOX (oxidizer). Leak effects: None.</RimPipe_Fluid_LOX.description>
+
+  <RimPipe_Fluid_RP1.label>RP-1 kerosene</RimPipe_Fluid_RP1.label>
+  <RimPipe_Fluid_RP1.description>RimPipe chem demo RP-1 fuel. Leak effects: None.</RimPipe_Fluid_RP1.description>
+
+  <RimPipe_Fluid_TestExhaust.label>test exhaust</RimPipe_Fluid_TestExhaust.label>
+  <RimPipe_Fluid_TestExhaust.description>RimPipe chem demo combustion product placeholder. Leak effects: None.</RimPipe_Fluid_TestExhaust.description>
+
+</LanguageData>

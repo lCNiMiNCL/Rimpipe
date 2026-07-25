@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Defs>
+
+  <!-- 化学示范流体：泄漏只扣量 -->
+  <RimPipe.FluidDef>
+    <defName>RimPipe_Fluid_LOX</defName>
+    <label>液氧</label>
+    <description>化学示范用氧化剂。泄漏时只扣量。</description>
+    <leakEffects>
+      <li>None</li>
+    </leakEffects>
+  </RimPipe.FluidDef>
+
+  <RimPipe.FluidDef>
+    <defName>RimPipe_Fluid_RP1</defName>
+    <label>航天煤油</label>
+    <description>化学示范用燃料。泄漏时只扣量。</description>
+    <leakEffects>
+      <li>None</li>
+    </leakEffects>
+  </RimPipe.FluidDef>
+
+  <RimPipe.FluidDef>
+    <defName>RimPipe_Fluid_TestExhaust</defName>
+    <label>测试排气</label>
+    <description>化学示范用燃烧产物。泄漏时只扣量。</description>
+    <leakEffects>
+      <li>None</li>
+    </leakEffects>
+  </RimPipe.FluidDef>
+
+</Defs>

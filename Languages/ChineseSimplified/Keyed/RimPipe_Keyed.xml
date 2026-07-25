@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<LanguageData>
+
+  <!-- Settings -->
+  <RimPipe_SettingsCategory>RimPipe</RimPipe_SettingsCategory>
+  <RimPipe_Settings_DumpOnDestroy>摧毁/拆卸时瞬间倾泻</RimPipe_Settings_DumpOnDestroy>
+  <RimPipe_Settings_DumpOnDestroyDesc>默认关闭：拆掉管道或设备只断开连接，罐里剩的液还在。开启后，拆毁时会小额销毁一点量（不产生脏污）。</RimPipe_Settings_DumpOnDestroyDesc>
+
+  <!-- Inspect -->
+  <RimPipe_Inspect_Empty>空</RimPipe_Inspect_Empty>
+  <RimPipe_Inspect_Container>容器[{0}]: {1} {2}/{3} P={4} T={5} netId={6}</RimPipe_Inspect_Container>
+  <RimPipe_Inspect_Port>端口 {0}@{1}</RimPipe_Inspect_Port>
+  <RimPipe_Inspect_Docked> 已对接</RimPipe_Inspect_Docked>
+  <RimPipe_Inspect_Undocked> 未对接</RimPipe_Inspect_Undocked>
+  <RimPipe_Inspect_Valve>阀门: {0}  有效流量={1}</RimPipe_Inspect_Valve>
+  <RimPipe_Inspect_Pump>泵：{0} · {1} · 有效流量={2} · 强制单向{3}</RimPipe_Inspect_Pump>
+  <RimPipe_Inspect_Reactor>反应釜：{0} · {1} · {2} · 混合比={3} · 上批n={4}</RimPipe_Inspect_Reactor>
+  <RimPipe_Inspect_ReactorEta>效率 η={0}</RimPipe_Inspect_ReactorEta>
+  <RimPipe_Inspect_ReactorBlockedCold>受阻：温度 &lt; {0}°C</RimPipe_Inspect_ReactorBlockedCold>
+  <RimPipe_Inspect_ReactorBlockedPressure>受阻：压力 &lt; {0}</RimPipe_Inspect_ReactorBlockedPressure>
+  <RimPipe_Inspect_HeatExchanger>换热器: {0}  有效换热率={1}</RimPipe_Inspect_HeatExchanger>
+  <RimPipe_Inspect_PipeCell>管道格（只负责连通，不存液）  {0}</RimPipe_Inspect_PipeCell>
+  <RimPipe_Inspect_TankBreach>破损（正在泄漏）</RimPipe_Inspect_TankBreach>
+  <RimPipe_Inspect_Intact>完好</RimPipe_Inspect_Intact>
+  <RimPipe_State_Open>开</RimPipe_State_Open>
+  <RimPipe_State_Closed>关</RimPipe_State_Closed>
+  <RimPipe_State_Powered>有电</RimPipe_State_Powered>
+  <RimPipe_State_Unpowered>无电</RimPipe_State_Unpowered>
+
+  <!-- Gizmos -->
+  <RimPipe_Gizmo_ValveOpen>阀门：开</RimPipe_Gizmo_ValveOpen>
+  <RimPipe_Gizmo_ValveClosed>阀门：关</RimPipe_Gizmo_ValveClosed>
+  <RimPipe_Gizmo_ValveDesc>开关阀门。关闭后这里不再过流，但连接关系还在。</RimPipe_Gizmo_ValveDesc>
+  <RimPipe_Gizmo_PumpOpen>泵：开</RimPipe_Gizmo_PumpOpen>
+  <RimPipe_Gizmo_PumpClosed>泵：关</RimPipe_Gizmo_PumpClosed>
+  <RimPipe_Gizmo_PumpDesc>开关泵。关着或没电时不过流；开着且有电时强制单向满流量（包括贴邻外侧）。</RimPipe_Gizmo_PumpDesc>
+  <RimPipe_Gizmo_ReactorOpen>反应釜：开</RimPipe_Gizmo_ReactorOpen>
+  <RimPipe_Gizmo_ReactorClosed>反应釜：关</RimPipe_Gizmo_ReactorClosed>
+  <RimPipe_Gizmo_ReactorDesc>开关反应釜。关着或没电时不反应；开着且有电时按配方消耗入料、产出产物。</RimPipe_Gizmo_ReactorDesc>
+  <RimPipe_Gizmo_ReactorMix>混合比 {0}</RimPipe_Gizmo_ReactorMix>
+  <RimPipe_Gizmo_ReactorMixDesc>调节氧化剂/燃料比。范围 {0}–{2}，化学计量 {1}；当前效率 {3}。</RimPipe_Gizmo_ReactorMixDesc>
+  <RimPipe_Gizmo_ReactorMixPreset>混合比预设</RimPipe_Gizmo_ReactorMixPreset>
+  <RimPipe_Gizmo_ReactorMixPresetDesc>贫氧 / 化学计量 / 富氧 快捷设定。</RimPipe_Gizmo_ReactorMixPresetDesc>
+  <RimPipe_Dialog_ReactorMix>混合比 {0}（η={1}）</RimPipe_Dialog_ReactorMix>
+  <RimPipe_MixPreset_Lean>贫氧 {0}</RimPipe_MixPreset_Lean>
+  <RimPipe_MixPreset_Stoich>化学计量 {0}</RimPipe_MixPreset_Stoich>
+  <RimPipe_MixPreset_Rich>富氧 {0}</RimPipe_MixPreset_Rich>
+  <RimPipe_Gizmo_HeatOpen>换热器：开</RimPipe_Gizmo_HeatOpen>
+  <RimPipe_Gizmo_HeatClosed>换热器：关</RimPipe_Gizmo_HeatClosed>
+  <RimPipe_Gizmo_HeatDesc>开关换热器。关闭后不再换热，连接关系还在。</RimPipe_Gizmo_HeatDesc>
+  <RimPipe_Gizmo_PipeBreached>管道：破损</RimPipe_Gizmo_PipeBreached>
+  <RimPipe_Gizmo_PipeIntact>管道：完好</RimPipe_Gizmo_PipeIntact>
+  <RimPipe_Gizmo_PipeBreachDesc>切换破损。破损时连通的罐会漏液；拆掉管道则断开连接并停止泄漏（默认不把罐倒空）。</RimPipe_Gizmo_PipeBreachDesc>
+  <RimPipe_Gizmo_TankBreached>储罐：破损</RimPipe_Gizmo_TankBreached>
+  <RimPipe_Gizmo_TankIntact>储罐：完好</RimPipe_Gizmo_TankIntact>
+  <RimPipe_Gizmo_TankBreachDesc>切换破损。破损时本罐自己按批漏液，不依赖旁边有没有管道。</RimPipe_Gizmo_TankBreachDesc>
+
+  <!-- PlaceWorker -->
+  <RimPipe_Place_CellOccupied>此处已有管道。</RimPipe_Place_CellOccupied>
+  <RimPipe_Place_CellOnAppliance>管道不能叠在储罐、三通、阀门等管件上。</RimPipe_Place_CellOnAppliance>
+  <RimPipe_Place_ApplianceOnPipe>管件不能叠在管道上。</RimPipe_Place_ApplianceOnPipe>
+  <RimPipe_Place_ApplianceOccupied>此处已有管网设备。</RimPipe_Place_ApplianceOccupied>
+
+</LanguageData>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Defs>
+  <!-- 验收用可燃液体：破损泄漏 → 燃油污渍 + 升温 -->
+  <RimPipe.FluidDef>
+    <defName>RimPipe_Fluid_TestFuel</defName>
+    <label>测试燃料</label>
+    <description>验收用可燃液体。泄漏时扣量，并留下燃油污渍、让房间升温。</description>
+    <leakEffects>
+      <li>Filth</li>
+      <li>Temperature</li>
+    </leakEffects>
+    <leakFilthDef>Filth_Fuel</leakFilthDef>
+    <leakFilthUnitsPerFilth>10</leakFilthUnitsPerFilth>
+    <leakHeatEnergyPerUnit>5</leakHeatEnergyPerUnit>
+  </RimPipe.FluidDef>
+</Defs>

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<LanguageData>
+
+  <RimPipe_StorageTank.label>storage tank</RimPipe_StorageTank.label>
+  <RimPipe_StorageTank.description>Fluid storage tank. One container with local N/S/W/E ports. Pipes must sit on the cell outward from a port.</RimPipe_StorageTank.description>
+
+  <RimPipe_TeeJunction.label>tee junction</RimPipe_TeeJunction.label>
+  <RimPipe_TeeJunction.description>Pipe tee junction. One container with local North/West/East ports (no South).</RimPipe_TeeJunction.description>
+
+  <RimPipe_Pipe.label>pipe</RimPipe_Pipe.label>
+  <RimPipe_Pipe.description>Fluid pipe cell. Carries cross-building Mapping topology only (does not store fluid). Uses vanilla PowerConduit art; link flag Custom1 so it does not merge with power conduits.</RimPipe_Pipe.description>
+
+  <RimPipe_Valve.label>valve</RimPipe_Valve.label>
+  <RimPipe_Valve.description>Fluid valve. Local West/East ports; internal Mapping rate follows open/close. Closed rate is 0 without tearing down topology.</RimPipe_Valve.description>
+
+  <RimPipe_Pump.label>pump</RimPipe_Pump.label>
+  <RimPipe_Pump.description>Fluid pump. Local West inlet / East outlet. When open and powered, forced one-way full rate ignoring pressure equalize. Closed or unpowered rate is 0 without tearing topology.</RimPipe_Pump.description>
+
+  <RimPipe_HeatExchanger.label>heat exchanger</RimPipe_HeatExchanger.label>
+  <RimPipe_HeatExchanger.description>Fluid heat exchanger. Local West/East chambers; when open, conducts heat to equalize temperatures without moving fluid mass. Closed heat rate is 0 without tearing topology.</RimPipe_HeatExchanger.description>
+
+  <RimPipe_Dev_Tank.label>rimpipe test tank</RimPipe_Dev_Tank.label>
+  <RimPipe_Dev_Tank.description>Stage-1 acceptance tank. One container with local N/S/W/E ports. Pipes must sit on the outward port cell.</RimPipe_Dev_Tank.description>
+
+  <RimPipe_Dev_TankLarge.label>rimpipe test tank (large)</RimPipe_Dev_TankLarge.label>
+  <RimPipe_Dev_TankLarge.description>Stage-3 3.1 pressure acceptance large tank (capacity 500). Debug / DefOf only.</RimPipe_Dev_TankLarge.description>
+
+  <RimPipe_Dev_Tee.label>rimpipe test tee</RimPipe_Dev_Tee.label>
+  <RimPipe_Dev_Tee.description>Stage-1 acceptance tee. One container with local North/West/East ports (no South).</RimPipe_Dev_Tee.description>
+
+  <RimPipe_Dev_Pipe.label>rimpipe test pipe</RimPipe_Dev_Pipe.label>
+  <RimPipe_Dev_Pipe.description>Stage-1 acceptance pipe cell. Topology only (does not store fluid). Uses vanilla conduit atlas + Custom1 link.</RimPipe_Dev_Pipe.description>
+
+  <RimPipe_Dev_Reactor.label>rimpipe test reactor</RimPipe_Dev_Reactor.label>
+  <RimPipe_Dev_Reactor.description>Chem-C Dev three-chamber reactor (LOX+RP-1→exhaust). Switch + power. Debug / DefOf only.</RimPipe_Dev_Reactor.description>
+
+  <RimPipe_Dev_InternalBridge.label>rimpipe test internal bridge</RimPipe_Dev_InternalBridge.label>
+  <RimPipe_Dev_InternalBridge.description>ExtHook-A Dev dual-chamber internal bridge via IPipeInternalMappingContributor. Debug / DefOf only.</RimPipe_Dev_InternalBridge.description>
+
+</LanguageData>

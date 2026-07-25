@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<LanguageData>
+
+  <!-- Settings -->
+  <RimPipe_SettingsCategory>RimPipe</RimPipe_SettingsCategory>
+  <RimPipe_Settings_DumpOnDestroy>Instant dump on destroy/deconstruct (dumpOnDestroy)</RimPipe_Settings_DumpOnDestroy>
+  <RimPipe_Settings_DumpOnDestroyDesc>Off by default: destroying pipes/devices only breaks topology; residual fluid stays. When on, destroys up to one batch rate of fluid (no Filth).</RimPipe_Settings_DumpOnDestroyDesc>
+
+  <!-- Inspect -->
+  <RimPipe_Inspect_Empty>empty</RimPipe_Inspect_Empty>
+  <RimPipe_Inspect_Container>Container[{0}]: {1} {2}/{3} P={4} T={5} netId={6}</RimPipe_Inspect_Container>
+  <RimPipe_Inspect_Port>Port {0}@{1}</RimPipe_Inspect_Port>
+  <RimPipe_Inspect_Docked> docked</RimPipe_Inspect_Docked>
+  <RimPipe_Inspect_Undocked> undocked</RimPipe_Inspect_Undocked>
+  <RimPipe_Inspect_Valve>Valve: {0}  effective rate={1}</RimPipe_Inspect_Valve>
+  <RimPipe_Inspect_Pump>Pump: {0} · {1} · effective rate={2} · Forced{3}</RimPipe_Inspect_Pump>
+  <RimPipe_Inspect_Reactor>Reactor: {0} · {1} · {2} · mix={3} · lastN={4}</RimPipe_Inspect_Reactor>
+  <RimPipe_Inspect_ReactorEta>efficiency η={0}</RimPipe_Inspect_ReactorEta>
+  <RimPipe_Inspect_ReactorBlockedCold>blocked: temperature &lt; {0}°C</RimPipe_Inspect_ReactorBlockedCold>
+  <RimPipe_Inspect_ReactorBlockedPressure>blocked: pressure &lt; {0}</RimPipe_Inspect_ReactorBlockedPressure>
+  <RimPipe_Inspect_HeatExchanger>Heat exchanger: {0}  effective heatRate={1}</RimPipe_Inspect_HeatExchanger>
+  <RimPipe_Inspect_PipeCell>RimPipe pipe cell (topology only)  {0}</RimPipe_Inspect_PipeCell>
+  <RimPipe_Inspect_TankBreach>breached (open leak)</RimPipe_Inspect_TankBreach>
+  <RimPipe_Inspect_Intact>intact</RimPipe_Inspect_Intact>
+  <RimPipe_State_Open>open</RimPipe_State_Open>
+  <RimPipe_State_Closed>closed</RimPipe_State_Closed>
+  <RimPipe_State_Powered>powered</RimPipe_State_Powered>
+  <RimPipe_State_Unpowered>unpowered</RimPipe_State_Unpowered>
+
+  <!-- Gizmos -->
+  <RimPipe_Gizmo_ValveOpen>Valve: open</RimPipe_Gizmo_ValveOpen>
+  <RimPipe_Gizmo_ValveClosed>Valve: closed</RimPipe_Gizmo_ValveClosed>
+  <RimPipe_Gizmo_ValveDesc>Toggle valve. Closed sets internal Mapping rate to 0 without tearing topology.</RimPipe_Gizmo_ValveDesc>
+  <RimPipe_Gizmo_PumpOpen>Pump: on</RimPipe_Gizmo_PumpOpen>
+  <RimPipe_Gizmo_PumpClosed>Pump: off</RimPipe_Gizmo_PumpClosed>
+  <RimPipe_Gizmo_PumpDesc>Toggle pump. Closed or unpowered rate is 0; open and powered forces full one-way rate (including face-adjacent external Mappings).</RimPipe_Gizmo_PumpDesc>
+  <RimPipe_Gizmo_ReactorOpen>Reactor: on</RimPipe_Gizmo_ReactorOpen>
+  <RimPipe_Gizmo_ReactorClosed>Reactor: off</RimPipe_Gizmo_ReactorClosed>
+  <RimPipe_Gizmo_ReactorDesc>Toggle reactor. Closed or unpowered does not convert; open and powered consumes inputs and fills outputs per recipe.</RimPipe_Gizmo_ReactorDesc>
+  <RimPipe_Gizmo_ReactorMix>mix ratio {0}</RimPipe_Gizmo_ReactorMix>
+  <RimPipe_Gizmo_ReactorMixDesc>Set oxidizer/fuel ratio (L1). Range {0}–{2}, stoich {1}; current η {3}.</RimPipe_Gizmo_ReactorMixDesc>
+  <RimPipe_Gizmo_ReactorMixPreset>mix presets</RimPipe_Gizmo_ReactorMixPreset>
+  <RimPipe_Gizmo_ReactorMixPresetDesc>Lean / stoich / rich shortcuts.</RimPipe_Gizmo_ReactorMixPresetDesc>
+  <RimPipe_Dialog_ReactorMix>mix {0} (η={1})</RimPipe_Dialog_ReactorMix>
+  <RimPipe_MixPreset_Lean>lean {0}</RimPipe_MixPreset_Lean>
+  <RimPipe_MixPreset_Stoich>stoich {0}</RimPipe_MixPreset_Stoich>
+  <RimPipe_MixPreset_Rich>rich {0}</RimPipe_MixPreset_Rich>
+  <RimPipe_Gizmo_HeatOpen>Heat exchanger: on</RimPipe_Gizmo_HeatOpen>
+  <RimPipe_Gizmo_HeatClosed>Heat exchanger: off</RimPipe_Gizmo_HeatClosed>
+  <RimPipe_Gizmo_HeatDesc>Toggle heat exchanger. Closed sets internal Heat Mapping rate to 0 without tearing topology.</RimPipe_Gizmo_HeatDesc>
+  <RimPipe_Gizmo_PipeBreached>Pipe: breached</RimPipe_Gizmo_PipeBreached>
+  <RimPipe_Gizmo_PipeIntact>Pipe: intact</RimPipe_Gizmo_PipeIntact>
+  <RimPipe_Gizmo_PipeBreachDesc>Toggle breach. Breached path Mappings leak (drain connected Containers). Destroying the pipe breaks topology and stops leak; no dump by default.</RimPipe_Gizmo_PipeBreachDesc>
+  <RimPipe_Gizmo_TankBreached>Tank: breached</RimPipe_Gizmo_TankBreached>
+  <RimPipe_Gizmo_TankIntact>Tank: intact</RimPipe_Gizmo_TankIntact>
+  <RimPipe_Gizmo_TankBreachDesc>Toggle breach. Breached tanks lose amount from this Container each batch (no pipe required).</RimPipe_Gizmo_TankBreachDesc>
+
+  <!-- PlaceWorker -->
+  <RimPipe_Place_CellOccupied>A pipe already occupies this cell.</RimPipe_Place_CellOccupied>
+  <RimPipe_Place_CellOnAppliance>Pipes cannot stack on tanks/tees/valves.</RimPipe_Place_CellOnAppliance>
+  <RimPipe_Place_ApplianceOnPipe>Appliances cannot stack on pipes.</RimPipe_Place_ApplianceOnPipe>
+  <RimPipe_Place_ApplianceOccupied>A pipe appliance already occupies this cell.</RimPipe_Place_ApplianceOccupied>
+
+</LanguageData>

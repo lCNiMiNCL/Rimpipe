@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Defs>
+
+  <!--
+    化学示范配方。
+    混合比 = 液氧量 / 航天煤油量；化学计量约 2.3:1。
+  -->
+  <RimPipe.PipeReactionDef>
+    <defName>RimPipe_Reaction_LoxRp1</defName>
+    <label>液氧/航天煤油燃烧（示范）</label>
+    <description>示范配方：按混合比消耗液氧与航天煤油，产出测试排气。</description>
+    <inputs>
+      <li>
+        <fluid>RimPipe_Fluid_LOX</fluid>
+        <stoichAmount>2.3</stoichAmount>
+      </li>
+      <li>
+        <fluid>RimPipe_Fluid_RP1</fluid>
+        <stoichAmount>1</stoichAmount>
+      </li>
+    </inputs>
+    <outputs>
+      <li>
+        <fluid>RimPipe_Fluid_TestExhaust</fluid>
+        <stoichAmount>3.3</stoichAmount>
+      </li>
+    </outputs>
+    <maxRate>5</maxRate>
+    <baseMixRatio>2.3</baseMixRatio>
+    <ratioMin>1.5</ratioMin>
+    <ratioMax>3.5</ratioMax>
+    <mixRatioOxidizerInputIndex>0</mixRatioOxidizerInputIndex>
+    <mixRatioFuelInputIndex>1</mixRatioFuelInputIndex>
+    <efficiencyAtStoich>1</efficiencyAtStoich>
+    <efficiencyAtRatioEdge>0.5</efficiencyAtRatioEdge>
+    <minTemperature>-273</minTemperature>
+    <minPressure>0</minPressure>
+    <heatPerBatch>10</heatPerBatch>
+    <heatTargetContainerIndex>-1</heatTargetContainerIndex>
+    <conditionContainerIndex>-1</conditionContainerIndex>
+    <requirePower>true</requirePower>
+  </RimPipe.PipeReactionDef>
+
+</Defs>

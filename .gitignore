@@ -1,0 +1,32 @@
+# Visual Studio / Cursor
+.vs/
+**/.vs/
+
+# Build outputs
+**/bin/
+**/obj/
+
+# Debug symbols (keep DLL, ignore PDB and XML)
+Assemblies/*.pdb
+Assemblies/*.xml
+**/*.pdb
+
+# User-specific files
+*.user
+*.suo
+*.cache
+*.csproj.user
+
+# Logs / temp
+*.log
+*.tmp
+*~
+
+# OS junk
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# IDE
+.idea/
+AGENTS.md

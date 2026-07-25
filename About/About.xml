@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<ModMetaData>
+	<name>RimPipe</name>
+	<author>NewFrontierTeam</author>
+	<packageId>rimpipe.core</packageId>
+	<modVersion IgnoreIfNoMatchingField="True">0.4.3</modVersion>
+	<supportedVersions>
+		<li>1.6</li>
+	</supportedVersions>
+	<description>RimPipe 0.4.3：RimWorld 1.6 管道框架（0.4.0 对内冻结面 + Debug 整理/套件 + Overlay 性能 + 拓扑重建计时与 Stress）。流体存在储罐等设备里，管道本身不存液。可造储罐、三通、管道、阀、泵、换热器；含压力均分、阻力、泄漏、热量、散热、分网休眠与化学示范。下游模组可扩展。研究门槛沿用原版。</description>
+</ModMetaData>
