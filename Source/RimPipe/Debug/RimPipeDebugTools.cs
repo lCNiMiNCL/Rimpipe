@@ -151,4 +151,32 @@ public static class RimPipeDebugTools
 		}
 		RimPipeDebugScenes.SpawnStressGrid(map, UI.MouseCell());
 	}
+
+	[DebugAction("RimPipe", "局部≈整图等价断言", false, false, false, false, false, 0, false,
+		actionType = DebugActionType.Action,
+		allowedGameStates = AllowedGameStates.PlayingOnMap)]
+	private static void VerifyLocalEqualsFull()
+	{
+		MapComponent_PipeNetwork? net = Find.CurrentMap?.GetComponent<MapComponent_PipeNetwork>();
+		if (net == null)
+		{
+			Log.Warning("[RimPipe] 当前地图没有 MapComponent_PipeNetwork。");
+			return;
+		}
+		Log.Message(net.DebugVerifyLocalEqualsFull());
+	}
+
+	[DebugAction("RimPipe", "环路拆段回归断言", false, false, false, false, false, 0, false,
+		actionType = DebugActionType.Action,
+		allowedGameStates = AllowedGameStates.PlayingOnMap)]
+	private static void VerifyLoopReconnect()
+	{
+		MapComponent_PipeNetwork? net = Find.CurrentMap?.GetComponent<MapComponent_PipeNetwork>();
+		if (net == null)
+		{
+			Log.Warning("[RimPipe] 当前地图没有 MapComponent_PipeNetwork。");
+			return;
+		}
+		Log.Message(net.DebugVerifyLoopReconnect());
+	}
 }

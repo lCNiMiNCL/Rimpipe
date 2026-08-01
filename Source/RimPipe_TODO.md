@@ -2,7 +2,7 @@
 
 > **角色：** 本文件同时是 **执行计划**（目标 / 架构 / 决议 / 阶段大纲）与 **任务清单**（可勾选 TODO）。  
 > **模组路径：** `D:\Steam\steamapps\common\RimWorld\Mods\Rimpipe`  
-> **状态：** 阶段四 **4.1–4.8 ✅**；**4.9 延后**；**4.10 DirtyTopo 延后**（7.10.b Benchmark/Stress ✅ · `0.4.3`）；**4.11 发布 R1 ✅**（§1.2s · `0.4.0`）；**4.12 Debug 整理 ✅**（§1.2t · `0.4.1`）；**Overlay 性能修复验收通过**（§1.2u / §7.3.f · `0.4.2`）；**批级优化验收通过**（§7.10.8 · `0.4.4`）；**休眠重评估单遍聚合验收通过**（§7.10.9 · `0.4.5`）  
+> **状态：** 阶段四 **4.1–4.8 ✅**；**4.9 延后**；**4.10 DirtyTopo 本体验收通过**（§7.10.12 · `0.4.7`）；**4.11 发布 R1 ✅**（§1.2s · `0.4.0`）；**4.12 Debug 整理 ✅**（§1.2t · `0.4.1`）；**Overlay 性能修复验收通过**（§1.2u / §7.3.f · `0.4.2`）；**批级优化验收通过**（§7.10.8 · `0.4.4`）；**休眠重评估单遍聚合验收通过**（§7.10.9 · `0.4.5`）；**代码审查 8 项修复验收通过**（§7.10.10 · `0.4.5`）；**批级缓存验收通过**（§7.10.11 · `0.4.6` · 暂不 push）  
 
 > **依据：** 2026-07 讨论决议 · 官方源码对齐 · 弃用策划文档仅作历史参考  
 > **约定：** 查接口不瞎猜 · 模糊先确认 · 无 Harmony（Bridge-A 不引入；Bridge-H 另议）· 无 `Node` / `Connection` / `PipeLine` · **管道格不储存流体**（仅拓扑；量仅在设备/管件 Container）· **文案风格见 §八 X10**  
@@ -920,7 +920,7 @@ want  = min(maxFlowRate, amountSrc, freeDst)
 | **1** | **4.11 发布准备 R1** | §7.11 | `0.4.0` 冻结 + `RimPipe_API.md`（含原 RELEASE）+ 回归（含化学） | ✅ §1.2s |
 | ~~1~~ | ~~**4.12 Debug 整理**~~ | — | — | ✅ §1.2t |
 
-**下一动作：** 手测 B3 已完成（§7.10.8）；批级优化 ✅；可选 R2 / Bridge-H（§7.9）/ 玩法功能；DirtyTopo 维持延后（重建 2.489ms < 门槛）。
+**下一动作：** 手测 B3 已完成（§7.10.8）；批级优化 ✅；休眠评估聚合 ✅；代码审查 8 项 ✅；可选 R2 / Bridge-H（§7.9）/ 玩法功能；DirtyTopo 维持延后（重建 2.489ms < 门槛）。
 
 ### 6.12 决议：泄漏效果 — E-A（已锁定 · 2026-07-14）
 
@@ -2096,6 +2096,86 @@ B1–B2 **已编码**；B3 为手测流程。**不等于**启动 DirtyTopo 编�
 | 早退保留 | 本网已定 Busy 即不再算 want（对齐原逐网早退） | ✅ |
 | 验收 | 空图跑 5 套件 = **5/5 满分**（休眠断言全过）；Stress（135 构件 / 507 管 / 150 Mapping / **30 网**）：`lastReevalMs 0.186–0.227 → 0.027–0.033ms`（≈7×，网更多反而更低）；全文无 Exception / Config error / 失败（Player.log · 2026-08-01） | ✅ 玩家确认 |
 
+#### 7.10.10 代码审查：8 项修复（2026-08-01 · 验收通过）
+
+> **来源：** 对全部源码做逻辑/编写错误审查 + 架构评判（TRAE-code-review；双代理交叉验证，8 项全部确认真实、均 minor，无 major）。  
+> **范围：** 仅实现层；**不改** Flow/Heat 公式、拓扑、存档（schema 仍 1）、DefName。
+
+| # | 修复 | 结果 |
+|---|------|------|
+| 1 | 删 `AccumulateChem` 死段（`batchN` 全库无读者）+ 移除 `batchN` 字段 | ✅ |
+| 2 | ChemSolver `perIn` 复用 scratch，CommitChem 单算透传（消除同批双算/双分配） | ✅ |
+| 3 | `ProcessLeakDeltas` 的 `leakWants`/`leakSum` 改成员字段复用 | ✅ |
+| 4 | `ApplyAmbientHeatExchange` 查温后移到保温/速率过滤之后（空罐/FullyQuiet 不再白查） | ✅ |
+| 5 | `WarnOrphanPipeTouches` 仅 DevMode 且非套件批量时执行（消除误导告警与重建开销） | ✅ |
+| 6 | 泵邻接缓存：拓扑重建时一次收集，开关/断电 O(全图)→O(局部) | ✅ |
+| 7 | 抽取公共 `TryResolveContainers`，消除阀/泵/换热器/DevBridge 4 处重复样板 | ✅ |
+| 8 | ChemSolver 输出腔「有量但 fluid 不匹配（含 null）」拦截（空流体带量加固） | ✅ |
+
+**验收：** 5 套件满分（R-框架 8/8 · R-物理 7/7 · R-热与环境 6/6 · R-化学 5/5 · R-扩展 2/2）；首次 R-物理 `泄漏Filth` 断言偶发误报 6/7（`filth 0→0`，同历史误报形态，重跑 7/7，**暂缓加固**）；无 Exception / Config error（Player.log · 2026-08-01）。  
+**版本：** About `0.4.5`（与性能切片同发，已 push）。
+
+#### 7.10.11 批级缓存：Busy 边/构件缓存 + 惰性重建（2026-08-01 · 验收通过）
+
+> **依据：** §7.10.8 后遗留热点——`AccumulateFlow/Heat` 每 Busy tick 仍对全图 mappings 做两遍全扫收集，`ProcessLeakDeltas`/`ApplyAmbientHeatExchange`/`ApplyFlowMixing` 每批全扫 mappings/members（phase=19 峰因之一）。批内休眠态恒定（§7.10.8 已文档化），可缓存按休眠态分类的列表，仅失效点重建。  
+> **范围：** 仅 [MapComponent_PipeNetwork.cs](Source/RimPipe/Map/MapComponent_PipeNetwork.cs) 批处理实现层；**不改** Flow/Heat 公式、拓扑、存档（schema 仍 1）、DefName。
+
+| 项 | 改动 | 结果 |
+|----|------|------|
+| 缓存结构 | `busyFlowMappings`/`busyHeatMappings` 改为缓存（由 `EnsureBatchCachesFresh` 重建，不再每批收集）；新增 `lightFlowMappings`（Busy∪AmbientOnly Flow 边，泄漏用）、`lightCommitMembers`（含任一 light 网容器的构件） | ✅ |
+| 惰性重建 | `batchCachesDirty` 标志 + `EnsureBatchCachesFresh()` 单遍扫 mappings/members；netId 越界按 Busy 处理（对齐 `GetNetSleepState` 回退） | ✅ |
+| 失效点置脏 | 拓扑重建 / `ReevaluateAllNetSleepStates` / `WakeNetwork` / `WakeNet` / 构件与管格注册注销 | ✅ |
+| Accumulate | `AccumulateFlow`/`AccumulateHeat` 删每批收集全扫，只清缓存内 Busy 边批次字段（上一批 Commit 已全量 ClearBatch，语义等价） | ✅ |
+| Commit | `ProcessLeakDeltas`/`ApplyAmbientHeatExchange`/`ApplyFlowMixing` 改迭代缓存；`SnapshotFlowBatchWants`/`ClearBatch` 保持全扫（仅 1 次/20 tick） | ✅ |
+| 编译 | `dotnet build` 0 警告 0 错误；IDE 诊断 0 | ✅ |
+| 验收 | 空图跑 5 套件 = **5/5 满分**（R-框架 8/8 · R-物理 7/7 · R-热与环境 6/6 · R-化学 5/5 · R-扩展 2/2）；Stress（135 构件 / 507 管 / 150 Mapping / 30 网）：`lastAccMs 0.157–0.245`（较 0.4.4 的 0.33–0.42 **≈2× 降**）· `lastCommitMs 0.045–0.062` · `lastReevalMs 0.025–0.036` · `lastTopoMs=2.521`；更大规模（200 构件 / 780 管 / 217 Mapping / 40 网）计时整图重建 **4.369ms**；全文无 Exception / Config error / `RimPipe…失败`（Player.log · 2026-08-01） | ✅ 玩家确认 |
+
+**语义等价性：** 批内休眠态恒定 ⇒ 缓存与逐边检查等价；`leakOpen`/`IsIncomplete` 仍在用时逐边读取；新唤醒网在下次批入口（置脏后惰性重建）纳入，与旧实现逐 tick 扫描时机一致。  
+**版本：** About `0.4.6`（验收通过 · 2026-08-01；**暂不 push**，等玩家指示）。
+
+> **DirtyTopo 决策补充观测：** 200 构件 / 780 管 / 217 Mapping / 40 网规模下整图重建多数 3.9–4.6ms（计时键 4.369ms），一次 6.038ms 峰（JIT/GC 抖动）。已从「远低于 5ms 门槛」逼近门槛；下游太空模组若管网更大，建议重跑 Benchmark 后再定 DirtyTopo 是否启动（§7.10.3）。
+
+#### 7.10.12 DirtyTopo 本体实施（2026-08-01 · 编码完成 · 待玩家验收）
+
+> **玩家确认（2026-08-01）：** 直接开 DirtyTopo 编码；决策：环路 pair 重连检查、netId 允许空洞、增量改造现有文件。  
+> **范围：** 仅 [MapComponent_PipeNetwork.cs](Source/RimPipe/Map/MapComponent_PipeNetwork.cs) 实现层 + 2 个 Debug 断言键；**不改** Flow/Heat 公式、Voronoi/直接相邻/内部映射算法语义、休眠判定规则、存档（schema 仍 1）、DefName。
+
+| 项 | 改动 | 结果 |
+|----|------|------|
+| 事件分流 | `ProcessDelayedActions`：`needsFullRebuild` 仍整图；`MemberChanged`/`PipeChanged` 走新增 `RebuildDirtyLocal` | ✅ 编译通过 |
+| 脏区捕获 | `DelayedAction` 扩展 `member` + `influenceCells`（构件 OccupiedRect ∪ 端口外格，Enqueue 时刻快照，规避 PostDeSpawn 后取不到现场） | ✅ |
+| 受影响区域 | 脏管格 4 邻洪水（放管合并/拆管分裂）+ 脏构件端口外格洪水；受影响构件 = 脏构件 ∪ 对向/被指构件 ∪ 分量附件构件 | ✅ |
+| 阈值保护 | 受影响管道格 > 全图 30% 自动退化整图重建（两处 + 重连洪水处） | ✅ |
+| 删除规则 | 管道映射按 `attachedBuildings` 含受影响分量管道建筑；直接相邻/内部按 `container.owner` ∈ 脏/受影响构件；同步清理 `cellToMapping`（`RemoveMappingCells`） | ✅ |
+| 局部重建 | 顺序与整图一致（直接相邻 → 管道 Voronoi → 内部）；`linkedPairs` 预置剩余全局映射 key；`BuildPipeAdjacentMappings`/`BuildInternalMappings` 重构为分量级/单构件级复用 | ✅ |
+| 环路重连 | 被删管道 pair 重建后未恢复 → 扫两端容器附件外格 → 洪水未受影响分量 → 有共同分量则并入重建（防环路拆段静默断连） | ✅ |
+| breach 局部化 | 仅刷受影响分量内 Breached 管道格的新 mapping；区域外保持原值 | ✅ |
+| netId 增量 | `ReassignNetworkIdsIncremental`：受影响容器沿全局 mappings BFS 收连通域，域内重打 id（优先复用旧 id，空洞允许暂留），受影响域 Wake，未受影响网休眠态不动 | ✅ |
+| 日志 | `[RimPipe] 局部拓扑重建：dirty=… 构件=… 管道格=… 分量=… Mapping=… nets=… 耗时=…ms`；`LastTopologyRebuildMs` 更新 | ✅ |
+| Debug 断言 | 新增「局部≈整图等价断言」（容器对集合 + 连通域划分比对）与「环路拆段回归断言」两个菜单键 | ✅ |
+| 编译 | `dotnet build RimPipe.sln` 0 警告 0 错误；IDE 诊断 0 | ✅ |
+| 验收 | **玩家复测通过**（§7.10.12 修复记录后 · 2026-08-01） | ✅ 玩家确认 |
+
+**设计要点（供验收对照）：**
+- 环路 pair 去重问题：同一容器对 A-B 经两条独立管道分量连接时，整图 `linkedPairs` 全局去重只保留一条 Mapping；局部拆掉一条路径后，重连检查会把另一条路径所在分量并入重建，恢复 A-B（否则静默断连，即 §7.10.2.3 警告的「幽灵 Mapping」形态）。
+- netId 空洞：分裂/删除产生的旧 id 不再被任何容器引用时保留为空洞（仅浪费 `sleepStates` 数组槽位，无人引用无害），下次整图重建（读档 / `RequestFullRebuild`）自然压缩。
+- 局部重建不调用 `WarnOrphanPipeTouches`（保留整图行为）；读档后仍整图重建（`ExposeData` 置 `needsFullRebuild`），存读档不受局部路径影响。
+
+**验收流程（玩家执行 · `0.4.7`）：**
+1. 空图跑 5 套件（R-框架 / R-物理 / R-热与环境 / R-化学 / R-扩展）→ 应满分
+2. Stress 场景手放/拆一截管 → 日志应出现「局部拓扑重建」且耗时远低于整图 4.369ms 基线
+3. Debug 菜单点「局部≈整图等价断言」→ `局部≈整图等价通过`
+4. Debug 菜单点「环路拆段回归断言」→ `环路拆段回归通过`
+5. 存读档 → 无异常、可继续流动（读档走整图重建验证一致性）
+6. 全文无 Exception / Config error / `RimPipe…失败`
+
+**版本：** About `0.4.7`（验收通过 · 2026-08-01；暂不 push）。
+
+> **修复记录（2026-08-01 玩家首测 → 复测通过）：**
+> 首测出现两问题：① R-物理恒 `摧毁停漏失败`（`residual=True stopped=False`）；② `局部≈整图等价失败`（局部残留 5 条陈旧 mapping，引用已销毁容器 #1186-1191，整图无）。根因同一：删除规则 a 仅按「路径管道 Position ∈ 受影响区域」判删，**已拆除管道不在 cellToMapping/洪水**（整段分量随拆除消失时受影响区域为空），且拆除后 Position 仍有效 → 引用已拆管道/已销毁构件的陈旧 mapping 漏删。修复：规则 b（端点属主 ∈ 脏构件）**扩到全部映射类型**；规则 a 增加**路径管道 `!Spawned`（已拆除）即删**。复测（Player.log · 2026-08-01）：5 套件满分（框架 8/8 · 物理 7/7 · 热环境 6/6 · 化学 5/5 · 扩展 2/2）；`局部≈整图等价通过`；`环路拆段回归通过`；Stress（135 构件/507 管/150 Mapping/30 网）局部重建 0.927–2.841ms vs 整图 2.802–3.217ms；存读档无异常；无 Exception / Config error / `RimPipe…失败`。**验收通过**。
+
+> **代码审查 4 项修复（2026-08-01 · TRAE-code-review 双代理交叉验证）：** ① 环路重连 `reconnectComponents.Contains` 对 HashSet 引用相等去重失效 → 改分量最小格规范 key（`reconnectSeen`）；② `DebugVerifyLoopReconnect` 测试场景遗留（2 罐+13 管）→ try/finally 清理；③ 局部重建日志 `dirty=` 用未去重 memberActions → 改 `dirtyMembers.Count`；④ 删除阈值复查死代码（与首次判定恒同）。编译 0 警告 0 错误。
+
 ---
 
 ### 7.11 决议：4.11 发布准备 — R1（已锁定 · 2026-07-20）
@@ -2342,8 +2422,11 @@ B1–B2 **已编码**；B3 为手测流程。**不等于**启动 DirtyTopo 编�
 | 7.10.b Benchmark + Stress Debug | ✅ 2026-07-20（About `0.4.3`；计时 + Stress + 计时重建键；DirtyTopo 仍延后） |
 | 批级优化（Acc/Heat 分配复用 + 按网跳过 + 批级计时） | ✅ 2026-08-01（§7.10.8 · 5/5 套件满分 · About `0.4.4`） |
 | 休眠重评估单遍聚合（Reevaluate O(nets×全图)→O(全图)） | ✅ 2026-08-01（§7.10.9 · 5/5 套件满分 · lastReevalMs ≈7× 降 · About `0.4.5`） |
-| **下一动作** | 手测 B3 ✅（重建 2.489ms < 门槛）；批级优化 ✅；休眠评估聚合 ✅；可选 R2 / Bridge-H（§7.9）/ 玩法功能 |
-| Bridge-H 实施 / DirtyTopo 本体 / R2 | ⬜ 延后（DirtyTopo：重建 2.489ms < ~5ms 门槛，维持延后） |
+| 代码审查 8 项修复（死代码/GC/日志/样板/化学加固） | ✅ 2026-08-01（§7.10.10 · 5 套件满分 · About `0.4.5` · 已 push） |
+| 批级缓存（Busy 边/构件缓存 + 惰性重建 · §7.10.11） | ✅ 编码+验收 2026-08-01（About `0.4.6`；5 套件满分 · lastAccMs ≈2× 降；暂不 push） |
+| **DirtyTopo 本体编码**（局部脏区拓扑 · §7.10.12） | ✅ 编码+验收 2026-08-01（About `0.4.7`；5 套件满分 + 等价断言 + 环路断言通过；首测修复陈旧 mapping 漏删后复测通过） |
+| **下一动作** | 手测 B3 ✅（重建 2.489ms < 门槛）；批级优化 ✅；休眠评估聚合 ✅；代码审查 8 项 ✅；批级缓存 ✅；**DirtyTopo 本体 ✅ 验收通过**；可选 R2 / Bridge-H（§7.9）/ 玩法功能 |
+| Bridge-H 实施 / R2 | ⬜ 延后；DirtyTopo 本体 ✅（§7.10.12 · `0.4.7`） |
 
 ---
 

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
+using RimPipe.Debug;
 using RimWorld;
 using UnityEngine;
 using Verse;
@@ -52,6 +53,16 @@ public class MapComponent_PipeNetwork : MapComponent
 	private readonly List<(Mapping map, Container hot, Container cold, float q)> heatWants = new List<(Mapping, Container, Container, float)>();
 	private readonly Dictionary<Container, float> heatStepDelta = new Dictionary<Container, float>();
 
+	// —— 批级缓存：Accumulate / 泄漏 / 散热 / 混温 只迭代「按休眠态分类」的缓存列表，
+	// 不再每批全图扫描 mappings / members。批内休眠态恒定（§7.10.8 已文档化），
+	// 因此仅在拓扑 / 休眠定态 / 唤醒 / 注册注销时把 batchCachesDirty 置 true，惰性重建。
+	/// <summary>Busy 网 ∪ AmbientOnly 网的 Flow 边（供泄漏 / 不完整残端扣量）。</summary>
+	private readonly List<Mapping> lightFlowMappings = new List<Mapping>();
+	/// <summary>含任一 light（Busy∪AmbientOnly）网容器的构件（供泄漏与环境散热）。</summary>
+	private readonly List<CompPipeNetworkMember> lightCommitMembers = new List<CompPipeNetworkMember>();
+	/// <summary>批级缓存是否失效，置 true 后下次批入口惰性重建。</summary>
+	private bool batchCachesDirty = true;
+
 	/// <summary>这张地图存档里记下的 schema 版本号。</summary>
 	private int rimPipeSchemaVersion = CurrentSchemaVersion;
 
@@ -93,11 +104,33 @@ public class MapComponent_PipeNetwork : MapComponent
 	{
 		public DelayedActionType type;
 		public IntVec3 cell;
+		/// <summary>MemberChanged 时携带的构件引用（注销后仍有效，用于删除规则匹配容器）。</summary>
+		public CompPipeNetworkMember? member;
+		/// <summary>
+		/// MemberChanged 时携带的「影响格」：构件 OccupiedRect 全部格 ∪ 各端口 OuterCell。
+		/// 必须在 Enqueue 时刻快照（PostDeSpawn 后拿不到 Ports/Containers 的现场布局）。
+		/// PipeChanged 时为 null。
+		/// </summary>
+		public List<IntVec3>? influenceCells;
 
-		public DelayedAction(DelayedActionType type, IntVec3 cell)
+		public DelayedAction(DelayedActionType type, IntVec3 cell, CompPipeNetworkMember? member = null)
 		{
 			this.type = type;
 			this.cell = cell;
+			this.member = member;
+			influenceCells = null;
+			if (type == DelayedActionType.MemberChanged && member != null && member.parent != null)
+			{
+				influenceCells = new List<IntVec3>();
+				foreach (IntVec3 foot in member.parent.OccupiedRect())
+				{
+					influenceCells.Add(foot);
+				}
+				for (int p = 0; p < member.Ports.Count; p++)
+				{
+					influenceCells.Add(member.Ports[p].OuterCell);
+				}
+			}
 		}
 	}
 
@@ -320,6 +353,7 @@ public class MapComponent_PipeNetwork : MapComponent
 		{
 			sleepStates[i] = PipeNetworkSleepState.Busy;
 		}
+		batchCachesDirty = true;
 	}
 
 	public void WakeNet(int netId, string? reason = null)
@@ -333,6 +367,7 @@ public class MapComponent_PipeNetwork : MapComponent
 		if (netId < sleepStates.Length)
 		{
 			sleepStates[netId] = PipeNetworkSleepState.Busy;
+			batchCachesDirty = true;
 		}
 	}
 
@@ -365,10 +400,11 @@ public class MapComponent_PipeNetwork : MapComponent
 		{
 			members.Add(comp);
 		}
+		batchCachesDirty = true;
 		AssignContainerIds(comp);
 		if (!respawningAfterLoad)
 		{
-			Enqueue(DelayedActionType.MemberChanged, comp.parent.Position);
+			Enqueue(DelayedActionType.MemberChanged, comp.parent.Position, comp);
 		}
 		else
 		{
@@ -388,7 +424,8 @@ public class MapComponent_PipeNetwork : MapComponent
 		}
 		UnregisterChemReactorsTouching(comp);
 		members.Remove(comp);
-		Enqueue(DelayedActionType.MemberChanged, comp.parent.Position);
+		batchCachesDirty = true;
+		Enqueue(DelayedActionType.MemberChanged, comp.parent.Position, comp);
 		if (!QuietDebugLogs)
 		{
 			Log.Message($"[RimPipe] 已注销构件 {comp.parent.LabelCap}");
@@ -561,6 +598,7 @@ public class MapComponent_PipeNetwork : MapComponent
 			pipeCells.Add(comp);
 		}
 		cellToPipe[comp.parent.Position] = comp;
+		batchCachesDirty = true;
 		Enqueue(DelayedActionType.PipeChanged, comp.parent.Position);
 	}
 
@@ -575,6 +613,7 @@ public class MapComponent_PipeNetwork : MapComponent
 		{
 			cellToPipe.Remove(comp.parent.Position);
 		}
+		batchCachesDirty = true;
 		Enqueue(DelayedActionType.PipeChanged, comp.parent.Position);
 	}
 
@@ -695,9 +734,9 @@ public class MapComponent_PipeNetwork : MapComponent
 		}
 	}
 
-	private void Enqueue(DelayedActionType type, IntVec3 cell)
+	private void Enqueue(DelayedActionType type, IntVec3 cell, CompPipeNetworkMember? member = null)
 	{
-		delayedActions.Add(new DelayedAction(type, cell));
+		delayedActions.Add(new DelayedAction(type, cell, member));
 	}
 
 	public void RequestFullRebuild()
@@ -712,14 +751,24 @@ public class MapComponent_PipeNetwork : MapComponent
 		{
 			return;
 		}
+		if (needsFullRebuild)
+		{
+			delayedActions.Clear();
+			RebuildAllMappings();
+			needsFullRebuild = false;
+			return;
+		}
+		// 局部重建：先值拷贝出动作列表再 Clear，避免遍历已清列表
+		List<DelayedAction> actions = new List<DelayedAction>(delayedActions);
 		delayedActions.Clear();
-		RebuildAllMappings();
+		RebuildDirtyLocal(actions);
 		needsFullRebuild = false;
 	}
 
 	private void RebuildAllMappings()
 	{
 		Stopwatch sw = Stopwatch.StartNew();
+		batchCachesDirty = true;
 		mappings.Clear();
 		cellToMapping.Clear();
 
@@ -780,6 +829,999 @@ public class MapComponent_PipeNetwork : MapComponent
 				$"[RimPipe] 拓扑重建：构件={members.Count} 管道格={pipeCells.Count} Mapping={mappings.Count} nets={netCount} 耗时={LastTopologyRebuildMs:F3}ms");
 		}
 		WarnOrphanPipeTouches();
+	}
+
+	/// <summary>局部脏区重建退化为整图重建的阈值：受影响管道格数占比。</summary>
+	private const float DirtyTopoThreshold = 0.30f;
+
+	/// <summary>
+	/// DirtyTopo 局部脏区拓扑重建：只重建受影响构件 / 受影响管道分量周边，
+	/// 语义与整图重建等价（同一容器对最多一条 Flow mapping、连通分量划分一致、环路拆一段仍连通）。
+	/// 超出阈值（>30% 管道格）时退化整图重建。
+	/// </summary>
+	private void RebuildDirtyLocal(List<DelayedAction> actions)
+	{
+		Stopwatch sw = Stopwatch.StartNew();
+		batchCachesDirty = true;
+
+		// —— 1) 收集脏动作：MemberChanged 与 PipeChanged 分流 ——
+		List<DelayedAction> memberActions = new List<DelayedAction>();
+		HashSet<IntVec3> pipeDirtyCells = new HashSet<IntVec3>();
+		for (int i = 0; i < actions.Count; i++)
+		{
+			DelayedAction a = actions[i];
+			if (a.type == DelayedActionType.MemberChanged)
+			{
+				memberActions.Add(a);
+			}
+			else if (a.type == DelayedActionType.PipeChanged)
+			{
+				pipeDirtyCells.Add(a.cell);
+			}
+			// FullRebuild 不会走到这里：needsFullRebuild=true 时 ProcessDelayedActions 已走整图分支
+		}
+
+		// —— 2)+4) 受影响管道分量洪水收集（规格步骤 4 的主体，先于阈值粗算） ——
+		HashSet<IntVec3> affectedPipeCells = new HashSet<IntVec3>();
+		List<HashSet<IntVec3>> components = new List<HashSet<IntVec3>>();
+		HashSet<IntVec3> visited = new HashSet<IntVec3>();
+		// 放管（格还在）：从格洪水；拆管（格已移除）：从 4 邻各自洪水（分裂）
+		foreach (IntVec3 c in pipeDirtyCells)
+		{
+			if (cellToPipe.ContainsKey(c))
+			{
+				if (!visited.Contains(c))
+				{
+					FloodPipeComponent(c, visited, components, affectedPipeCells);
+				}
+			}
+			else
+			{
+				foreach (IntVec3 dir in GenAdj.CardinalDirections)
+				{
+					IntVec3 n = c + dir;
+					if (!n.InBounds(map) || !cellToPipe.ContainsKey(n) || visited.Contains(n))
+					{
+						continue;
+					}
+					FloodPipeComponent(n, visited, components, affectedPipeCells);
+				}
+			}
+		}
+		// 构件影响格落在管道上的 → 洪水（放/拆构件都会带动周边分量）
+		for (int i = 0; i < memberActions.Count; i++)
+		{
+			List<IntVec3>? cells = memberActions[i].influenceCells;
+			if (cells == null)
+			{
+				continue;
+			}
+			for (int j = 0; j < cells.Count; j++)
+			{
+				IntVec3 cell = cells[j];
+				if (cell.IsValid && cellToPipe.ContainsKey(cell) && !visited.Contains(cell))
+				{
+					FloodPipeComponent(cell, visited, components, affectedPipeCells);
+				}
+			}
+		}
+
+		// —— 2) 阈值保护：受影响管道格超 30% 退化整图 ——
+		if (affectedPipeCells.Count > pipeCells.Count * DirtyTopoThreshold)
+		{
+			RebuildAllMappings();
+			return;
+		}
+
+		// —— 3) 受影响构件集 ——
+		// dirtyMembers：memberActions 的 member（含已注销，供删除规则匹配容器）
+		// affectedMembers：脏构件（parent != null）∪ 被指/对向构件 ∪ 受影响分量附件构件
+		HashSet<CompPipeNetworkMember> dirtyMembers = new HashSet<CompPipeNetworkMember>();
+		HashSet<CompPipeNetworkMember> affectedMembers = new HashSet<CompPipeNetworkMember>();
+		for (int i = 0; i < memberActions.Count; i++)
+		{
+			CompPipeNetworkMember? mem = memberActions[i].member;
+			if (mem == null)
+			{
+				continue;
+			}
+			dirtyMembers.Add(mem);
+			if (mem.parent != null)
+			{
+				affectedMembers.Add(mem);
+			}
+		}
+		// 被指/对向构件：全扫 members×ports，port.OuterCell 落在任一影响格内
+		for (int i = 0; i < members.Count; i++)
+		{
+			CompPipeNetworkMember m = members[i];
+			if (m?.parent == null || !m.parent.Spawned)
+			{
+				continue;
+			}
+			for (int p = 0; p < m.Ports.Count; p++)
+			{
+				IntVec3 outer = m.Ports[p].OuterCell;
+				for (int j = 0; j < memberActions.Count; j++)
+				{
+					List<IntVec3>? cells = memberActions[j].influenceCells;
+					if (cells != null && cells.Contains(outer))
+					{
+						affectedMembers.Add(m);
+						break;
+					}
+				}
+			}
+		}
+		// 受影响分量附件构件
+		for (int i = 0; i < components.Count; i++)
+		{
+			CollectAttachedMembers(components[i], affectedMembers);
+		}
+
+		// —— 6) 删除受影响区域的旧 mapping（倒序遍历） ——
+		List<(Container a, Container b)> deletedPipePairs = new List<(Container, Container)>();
+		HashSet<Container> affectedContainers = new HashSet<Container>();
+		for (int i = mappings.Count - 1; i >= 0; i--)
+		{
+			Mapping m = mappings[i];
+			// 判断映射类型：attachedBuildings 中任一建筑带 CompPipeCell → 管道映射
+			bool isPipeMapping = false;
+			for (int j = 0; j < m.attachedBuildings.Count; j++)
+			{
+				Building? b = m.attachedBuildings[j];
+				if (b != null && b.GetComp<CompPipeCell>() != null)
+				{
+					isPipeMapping = true;
+					break;
+				}
+			}
+			bool delete = false;
+			// 规则 b（最高优先）：任一端容器属于脏构件（含已注销）→ 删。
+			// 适用于管道 / 直接相邻 / 内部映射：被注销构件的映射一律作废，不依赖路径判断。
+			if ((m.containerA?.owner != null && dirtyMembers.Contains(m.containerA.owner))
+				|| (m.containerB?.owner != null && dirtyMembers.Contains(m.containerB.owner)))
+			{
+				delete = true;
+			}
+			else if (isPipeMapping)
+			{
+				// 规则 a：任一管道建筑已拆除（!Spawned）或 Position 失效，或 Position 落在受影响管道格内 → 删
+				// （并记录 pair 供重连检查）。
+				// !Spawned 覆盖「整段分量随拆除消失、受影响区域洪水为空」的漏删场景（摧毁停漏/等价断言复现）：
+				// 已拆管道不在 cellToMapping/洪水中，仅靠 Position 命中会漏删陈旧映射。
+				for (int j = 0; j < m.attachedBuildings.Count; j++)
+				{
+					Building? b = m.attachedBuildings[j];
+					if (b != null && b.GetComp<CompPipeCell>() != null
+						&& (!b.Spawned || !b.Position.IsValid || affectedPipeCells.Contains(b.Position)))
+					{
+						delete = true;
+						break;
+					}
+				}
+				if (delete && m.containerA != null && m.containerB != null)
+				{
+					deletedPipePairs.Add((m.containerA, m.containerB));
+				}
+			}
+			else
+			{
+				// 规则 c：直接相邻映射（>=2 建筑）任一端在受影响构件集 → 删
+				if (m.attachedBuildings.Count >= 2
+					&& ((m.containerA?.owner != null && affectedMembers.Contains(m.containerA.owner))
+						|| (m.containerB?.owner != null && affectedMembers.Contains(m.containerB.owner))))
+				{
+					delete = true;
+				}
+			}
+			if (delete)
+			{
+				if (m.containerA != null)
+				{
+					affectedContainers.Add(m.containerA);
+				}
+				if (m.containerB != null)
+				{
+					affectedContainers.Add(m.containerB);
+				}
+				RemoveMappingCells(m);
+				mappings.RemoveAt(i);
+			}
+		}
+
+		// —— 7) linkedPairs 初始化：剩余 mapping 全部预置去重 key ——
+		HashSet<long> linkedPairs = new HashSet<long>();
+		for (int i = 0; i < mappings.Count; i++)
+		{
+			Mapping m = mappings[i];
+			if (m.containerA == null || m.containerB == null || m.containerA.id < 0 || m.containerB.id < 0)
+			{
+				continue;
+			}
+			linkedPairs.Add(ContainerPairKey(m.containerA.id, m.containerB.id, m.mappingType));
+		}
+
+		// —— 8) 重建（顺序与整图一致：直接相邻 → 管道分量 Voronoi → 内部映射） ——
+		// a. Face-to-face 直接相邻（仅受影响构件的端口）
+		foreach (CompPipeNetworkMember a in affectedMembers)
+		{
+			if (a?.parent == null || !a.parent.Spawned)
+			{
+				continue;
+			}
+			for (int p = 0; p < a.Ports.Count; p++)
+			{
+				Port portA = a.Ports[p];
+				IntVec3 outer = portA.OuterCell;
+				if (!outer.InBounds(map))
+				{
+					continue;
+				}
+				CompPipeNetworkMember? b = MemberAt(outer);
+				if (b == null || b == a)
+				{
+					continue;
+				}
+				Rot4 need = portA.WorldRot.Opposite;
+				Port? portB = b.FindPortFacingWorld(need);
+				if (portB == null)
+				{
+					continue;
+				}
+				if (!a.parent.OccupiedRect().Contains(portB.OuterCell))
+				{
+					continue;
+				}
+				TryAddPair(portA.Container, portB.Container, a.parent as Building, b.parent as Building, linkedPairs, null);
+			}
+		}
+		// b. 管道分量 Voronoi（受影响分量逐个重建）
+		for (int i = 0; i < components.Count; i++)
+		{
+			BuildPipeComponent(components[i], linkedPairs);
+		}
+		// c. 内部映射（脏构件中仍在 members 且 Spawned 者）
+		foreach (CompPipeNetworkMember mem in dirtyMembers)
+		{
+			if (mem?.parent == null || !mem.parent.Spawned || !members.Contains(mem))
+			{
+				continue;
+			}
+			BuildInternalMappingsFor(mem, linkedPairs);
+		}
+
+		// —— 9) 环路重连检查：对「重建后仍未恢复」的被删管道 pair 找替代连通分量 ——
+		List<HashSet<IntVec3>> reconnectComponents = new List<HashSet<IntVec3>>();
+		// 分量去重 key：同一分量可能被多个 pair / 附件格洪水到，用分量最小格作规范 key
+		//（List.Contains 对 HashSet 是引用相等，不能用于去重）
+		HashSet<IntVec3> reconnectSeen = new HashSet<IntVec3>();
+		if (deletedPipePairs.Count > 0)
+		{
+			// 恢复判定：当前 mappings 里存在同 key（Flow）的 pair
+			HashSet<(Container, Container)> recovered = new HashSet<(Container, Container)>();
+			for (int i = 0; i < mappings.Count; i++)
+			{
+				Mapping m = mappings[i];
+				if (m.mappingType != MappingType.Flow || m.containerA == null || m.containerB == null)
+				{
+					continue;
+				}
+				long key = ContainerPairKey(m.containerA.id, m.containerB.id, MappingType.Flow);
+				for (int j = 0; j < deletedPipePairs.Count; j++)
+				{
+					(Container a, Container b) dp = deletedPipePairs[j];
+					if (dp.a.id >= 0 && dp.b.id >= 0
+						&& ContainerPairKey(dp.a.id, dp.b.id, MappingType.Flow) == key)
+					{
+						recovered.Add(dp);
+					}
+				}
+			}
+			foreach ((Container a, Container b) dp in deletedPipePairs)
+			{
+				if (recovered.Contains(dp))
+				{
+					continue;
+				}
+				// 已注销构件无需重连
+				if (dp.a.owner == null || dp.b.owner == null
+					|| !members.Contains(dp.a.owner) || !members.Contains(dp.b.owner))
+				{
+					continue;
+				}
+				// 收集两端容器的管道附件外格
+				List<IntVec3> attachA = new List<IntVec3>();
+				List<IntVec3> attachB = new List<IntVec3>();
+				for (int i = 0; i < members.Count; i++)
+				{
+					CompPipeNetworkMember m = members[i];
+					if (m?.parent == null || !m.parent.Spawned)
+					{
+						continue;
+					}
+					for (int p = 0; p < m.Ports.Count; p++)
+					{
+						Port port = m.Ports[p];
+						IntVec3 outer = port.OuterCell;
+						if (!cellToPipe.ContainsKey(outer))
+						{
+							continue;
+						}
+						if (ReferenceEquals(port.Container, dp.a))
+						{
+							attachA.Add(outer);
+						}
+						else if (ReferenceEquals(port.Container, dp.b))
+						{
+							attachB.Add(outer);
+						}
+					}
+				}
+				if (attachA.Count == 0 || attachB.Count == 0)
+				{
+					continue;
+				}
+				bool found = false;
+				foreach (IntVec3 ca in attachA)
+				{
+					if (affectedPipeCells.Contains(ca))
+					{
+						continue; // 已重建过的小残段，无对端附件
+					}
+					HashSet<IntVec3> compCells = FloodComponentSet(ca);
+					if (compCells.Count > pipeCells.Count * DirtyTopoThreshold)
+					{
+						RebuildAllMappings();
+						return;
+					}
+					foreach (IntVec3 cb in attachB)
+					{
+						if (compCells.Contains(cb))
+						{
+							// 同一分量可能被多个 pair / 附件格洪水到，取分量最小格作规范 key 去重
+							IntVec3 minCell = IntVec3.Invalid;
+							foreach (IntVec3 cc in compCells)
+							{
+								if (!minCell.IsValid || cc.x < minCell.x || (cc.x == minCell.x && cc.z < minCell.z))
+								{
+									minCell = cc;
+								}
+							}
+							if (reconnectSeen.Add(minCell))
+							{
+								reconnectComponents.Add(compCells);
+							}
+							found = true;
+							break;
+						}
+					}
+					if (found)
+					{
+						break;
+					}
+				}
+			}
+			// 重连分量并入受影响管道格并重建
+			if (reconnectComponents.Count > 0)
+			{
+				for (int i = 0; i < reconnectComponents.Count; i++)
+				{
+					HashSet<IntVec3> comp = reconnectComponents[i];
+					foreach (IntVec3 cc in comp)
+					{
+						affectedPipeCells.Add(cc);
+					}
+				}
+				for (int i = 0; i < reconnectComponents.Count; i++)
+				{
+					BuildPipeComponent(reconnectComponents[i], linkedPairs);
+					CollectAttachmentContainers(reconnectComponents[i], affectedContainers);
+				}
+			}
+		}
+
+		// —— 10) breach 局部化：只刷受影响区域内 Breached 管道格的新 mapping；区域外保持原值 ——
+		foreach (IntVec3 cell in affectedPipeCells)
+		{
+			if (!cellToPipe.TryGetValue(cell, out CompPipeCell? pipe) || pipe == null || !pipe.Breached)
+			{
+				continue;
+			}
+			if (!cellToMapping.TryGetValue(cell, out List<Mapping>? list) || list == null)
+			{
+				continue;
+			}
+			for (int j = 0; j < list.Count; j++)
+			{
+				if (list[j] != null)
+				{
+					list[j].leakOpen = true;
+				}
+			}
+		}
+
+		// —— 11) netId 增量：受影响域重打 id，未受影响域完全不动 ——
+		HashSet<Container> seedContainers = new HashSet<Container>();
+		foreach (CompPipeNetworkMember mem in dirtyMembers)
+		{
+			if (mem?.Containers == null)
+			{
+				continue;
+			}
+			for (int c = 0; c < mem.Containers.Count; c++)
+			{
+				if (mem.Containers[c] != null)
+				{
+					seedContainers.Add(mem.Containers[c]);
+				}
+			}
+		}
+		for (int i = 0; i < components.Count; i++)
+		{
+			CollectAttachmentContainers(components[i], seedContainers);
+		}
+		foreach (Container c in affectedContainers)
+		{
+			if (c != null)
+			{
+				seedContainers.Add(c);
+			}
+		}
+		for (int i = 0; i < reconnectComponents.Count; i++)
+		{
+			CollectAttachmentContainers(reconnectComponents[i], seedContainers);
+		}
+		if (seedContainers.Count > 0)
+		{
+			ReassignNetworkIdsIncremental(seedContainers);
+		}
+
+		// —— 13) 批级缓存失效（WakeNet 已置；兜底） ——
+		batchCachesDirty = true;
+
+		// —— 14) 计时与日志 ——
+		sw.Stop();
+		LastTopologyRebuildMs = (float)sw.Elapsed.TotalMilliseconds;
+		if (!QuietDebugLogs)
+		{
+			Log.Message(
+				$"[RimPipe] 局部拓扑重建：dirty={dirtyMembers.Count + pipeDirtyCells.Count} 构件={affectedMembers.Count} " +
+				$"管道格={affectedPipeCells.Count} 分量={components.Count} Mapping={mappings.Count} nets={netCount} " +
+				$"耗时={LastTopologyRebuildMs:F3}ms");
+		}
+	}
+
+	/// <summary>从 seed 洪水收集一个管道连通分量（4 邻，cellToPipe 可达），并入 visited/components/affected。</summary>
+	private void FloodPipeComponent(
+		IntVec3 seed,
+		HashSet<IntVec3> visited,
+		List<HashSet<IntVec3>> components,
+		HashSet<IntVec3> affectedPipeCells)
+	{
+		HashSet<IntVec3> comp = new HashSet<IntVec3>();
+		Queue<IntVec3> flood = new Queue<IntVec3>();
+		flood.Enqueue(seed);
+		visited.Add(seed);
+		comp.Add(seed);
+		while (flood.Count > 0)
+		{
+			IntVec3 c = flood.Dequeue();
+			foreach (IntVec3 dir in GenAdj.CardinalDirections)
+			{
+				IntVec3 n = c + dir;
+				if (!n.InBounds(map) || visited.Contains(n) || !cellToPipe.ContainsKey(n))
+				{
+					continue;
+				}
+				visited.Add(n);
+				flood.Enqueue(n);
+				comp.Add(n);
+			}
+		}
+		components.Add(comp);
+		foreach (IntVec3 cc in comp)
+		{
+			affectedPipeCells.Add(cc);
+		}
+	}
+
+	/// <summary>从 seed 洪水收集一个连通分量（不改 visited；供环路重连检查用）。</summary>
+	private HashSet<IntVec3> FloodComponentSet(IntVec3 seed)
+	{
+		HashSet<IntVec3> comp = new HashSet<IntVec3>();
+		Queue<IntVec3> flood = new Queue<IntVec3>();
+		flood.Enqueue(seed);
+		comp.Add(seed);
+		while (flood.Count > 0)
+		{
+			IntVec3 c = flood.Dequeue();
+			foreach (IntVec3 dir in GenAdj.CardinalDirections)
+			{
+				IntVec3 n = c + dir;
+				if (!n.InBounds(map) || comp.Contains(n) || !cellToPipe.ContainsKey(n))
+				{
+					continue;
+				}
+				comp.Add(n);
+				flood.Enqueue(n);
+			}
+		}
+		return comp;
+	}
+
+	/// <summary>把端口外格落在分量内的构件收进集合（分量附件构件）。</summary>
+	private void CollectAttachedMembers(HashSet<IntVec3> componentCells, HashSet<CompPipeNetworkMember> into)
+	{
+		for (int i = 0; i < members.Count; i++)
+		{
+			CompPipeNetworkMember m = members[i];
+			if (m?.parent == null || !m.parent.Spawned)
+			{
+				continue;
+			}
+			for (int p = 0; p < m.Ports.Count; p++)
+			{
+				if (componentCells.Contains(m.Ports[p].OuterCell))
+				{
+					into.Add(m);
+					break;
+				}
+			}
+		}
+	}
+
+	/// <summary>把端口外格落在分量内的容器收进集合（分量附件容器，供 netId 种子）。</summary>
+	private void CollectAttachmentContainers(HashSet<IntVec3> componentCells, HashSet<Container> into)
+	{
+		for (int i = 0; i < members.Count; i++)
+		{
+			CompPipeNetworkMember m = members[i];
+			if (m?.parent == null || !m.parent.Spawned)
+			{
+				continue;
+			}
+			for (int p = 0; p < m.Ports.Count; p++)
+			{
+				Port port = m.Ports[p];
+				if (!componentCells.Contains(port.OuterCell))
+				{
+					continue;
+				}
+				Container? cont = port.Container;
+				if (cont != null)
+				{
+					into.Add(cont);
+				}
+			}
+		}
+	}
+
+	/// <summary>
+	/// 从 cellToMapping 索引里摘除 Mapping m。
+	/// 与 CacheMappingCells 对称；已拆建筑（Spawned=false）也清理——
+	/// 其格索引是 Spawned 时写入的，若不摘除会残留旧 mapping 引用（导致日后该格 dump 误判）。
+	/// </summary>
+	private void RemoveMappingCells(Mapping m)
+	{
+		for (int i = 0; i < m.attachedBuildings.Count; i++)
+		{
+			Building? b = m.attachedBuildings[i];
+			if (b == null)
+			{
+				continue;
+			}
+			foreach (IntVec3 cell in b.OccupiedRect())
+			{
+				if (!cellToMapping.TryGetValue(cell, out List<Mapping>? list) || list == null)
+				{
+					continue;
+				}
+				list.Remove(m);
+				if (list.Count == 0)
+				{
+					cellToMapping.Remove(cell);
+				}
+			}
+		}
+	}
+
+	/// <summary>
+	/// netId 增量：只对受影响 seed 容器所在的连通域重打 id（允许空洞，不压缩），
+	/// 未受影响容器的 netId / sleepStates 完全不动；受影响域一律 Wake。
+	/// </summary>
+	private void ReassignNetworkIdsIncremental(HashSet<Container> seedContainers)
+	{
+		// 1) 从 seed 沿当前全局 mappings 做 BFS 收集连通域
+		List<HashSet<Container>> domains = new List<HashSet<Container>>();
+		HashSet<Container> visited = new HashSet<Container>();
+		foreach (Container seed in seedContainers)
+		{
+			if (seed == null || visited.Contains(seed))
+			{
+				continue;
+			}
+			HashSet<Container> domain = new HashSet<Container>();
+			Queue<Container> q = new Queue<Container>();
+			q.Enqueue(seed);
+			visited.Add(seed);
+			domain.Add(seed);
+			while (q.Count > 0)
+			{
+				Container c = q.Dequeue();
+				for (int i = 0; i < mappings.Count; i++)
+				{
+					Mapping m = mappings[i];
+					if (m.IsIncomplete || m.containerA == null || m.containerB == null)
+					{
+						continue;
+					}
+					Container? other = null;
+					if (ReferenceEquals(m.containerA, c))
+					{
+						other = m.containerB;
+					}
+					else if (ReferenceEquals(m.containerB, c))
+					{
+						other = m.containerA;
+					}
+					if (other == null || visited.Contains(other))
+					{
+						continue;
+					}
+					visited.Add(other);
+					q.Enqueue(other);
+					domain.Add(other);
+				}
+			}
+			domains.Add(domain);
+		}
+		if (domains.Count == 0)
+		{
+			return;
+		}
+
+		// 2) 分配 id：域优先复用「域内容器原 netId 中最小有效值且未被本次其他域占用」；否则新 id=netCount++
+		HashSet<int> usedThisPass = new HashSet<int>();
+		for (int d = 0; d < domains.Count; d++)
+		{
+			HashSet<Container> domain = domains[d];
+			int bestId = -1;
+			foreach (Container c in domain)
+			{
+				if (c.netId >= 0 && c.netId < netCount && !usedThisPass.Contains(c.netId))
+				{
+					if (bestId < 0 || c.netId < bestId)
+					{
+						bestId = c.netId;
+					}
+				}
+			}
+			if (bestId < 0)
+			{
+				bestId = netCount++;
+				EnsureSleepStatesCapacity();
+			}
+			usedThisPass.Add(bestId);
+			foreach (Container c in domain)
+			{
+				c.netId = bestId;
+			}
+			WakeNet(bestId, "topology");
+		}
+
+		// 3) 同步 Mapping.netId：两端任一属于受影响域 → 用该容器 netId
+		HashSet<Container> allAffected = new HashSet<Container>();
+		for (int d = 0; d < domains.Count; d++)
+		{
+			foreach (Container c in domains[d])
+			{
+				allAffected.Add(c);
+			}
+		}
+		for (int i = 0; i < mappings.Count; i++)
+		{
+			Mapping m = mappings[i];
+			if (m.containerA != null && allAffected.Contains(m.containerA))
+			{
+				m.netId = m.containerA.netId;
+			}
+			else if (m.containerB != null && allAffected.Contains(m.containerB))
+			{
+				m.netId = m.containerB.netId;
+			}
+		}
+	}
+
+	/// <summary>调试：局部重建结果 vs 强制整图重建结果的等价断言（容器对集合 + 连通域划分）。</summary>
+	public string DebugVerifyLocalEqualsFull()
+	{
+		string before = SnapshotTopologyString();
+		RequestFullRebuild();
+		ProcessDelayedActions();
+		string after = SnapshotTopologyString();
+		if (before == after)
+		{
+			return "局部≈整图等价通过";
+		}
+		return $"局部≈整图等价失败\n——局部状态：{before}\n——整图状态：{after}";
+	}
+
+	/// <summary>
+	/// 调试：环路拆段回归断言。先在空地生成 A、B 两储罐 + 两条互不 4 邻的独立管道路径，
+	/// 拆掉其中一条路径的中间一段后，A、B 间应仍存在 Flow mapping（另一路径经重连恢复）。
+	/// </summary>
+	public string DebugVerifyLoopReconnect()
+	{
+		if (map == null)
+		{
+			return "环路拆段回归失败：当前地图没有 MapComponent（map 为空）";
+		}
+		ThingDef tankDef = RimPipeDefOf.RimPipe_StorageTank;
+		ThingDef pipeDef = RimPipeDefOf.RimPipe_Pipe;
+		if (tankDef == null || pipeDef == null)
+		{
+			return "环路拆段回归失败：缺少 ThingDef（RimPipe_StorageTank / RimPipe_Pipe）";
+		}
+
+		// 布局：南线（z=0）A 东口 → (1,0)..(5,0) → B 西口；北 U 线（z=1..2）A 北口 → 上折 → B 北口。
+		// 两条管线作为管道分量互不 4 邻接触，各自连通 A、B。
+		IntVec3 aPos = new IntVec3(0, 0, 0);
+		IntVec3 bPos = new IntVec3(6, 0, 0);
+		List<IntVec3> line1 = new List<IntVec3>();
+		for (int x = 1; x <= 5; x++)
+		{
+			line1.Add(new IntVec3(x, 0, 0));
+		}
+		List<IntVec3> line2 = new List<IntVec3>
+		{
+			new IntVec3(0, 0, 1),
+			new IntVec3(0, 0, 2)
+		};
+		for (int x = 1; x <= 6; x++)
+		{
+			line2.Add(new IntVec3(x, 0, 2));
+		}
+		line2.Add(new IntVec3(6, 0, 1));
+
+		if (!aPos.InBounds(map) || !bPos.InBounds(map))
+		{
+			return "环路拆段回归失败：原点越界";
+		}
+		for (int i = 0; i < line1.Count; i++)
+		{
+			if (!line1[i].InBounds(map))
+			{
+				return "环路拆段回归失败：南线越界";
+			}
+		}
+		for (int i = 0; i < line2.Count; i++)
+		{
+			if (!line2[i].InBounds(map))
+			{
+				return "环路拆段回归失败：北线越界";
+			}
+		}
+
+		// 清场后生成（清场为重复运行自愈；本测试结束 finally 再清一次，避免遗留场景）
+		RimPipeDebugUtil.DestroyAt(map, aPos);
+		RimPipeDebugUtil.DestroyAt(map, bPos);
+		for (int i = 0; i < line1.Count; i++)
+		{
+			RimPipeDebugUtil.DestroyAt(map, line1[i]);
+		}
+		for (int i = 0; i < line2.Count; i++)
+		{
+			RimPipeDebugUtil.DestroyAt(map, line2[i]);
+		}
+		try
+		{
+			Building tankA = (Building)GenSpawn.Spawn(tankDef, aPos, map, Rot4.North);
+			Building tankB = (Building)GenSpawn.Spawn(tankDef, bPos, map, Rot4.North);
+			for (int i = 0; i < line1.Count; i++)
+			{
+				GenSpawn.Spawn(pipeDef, line1[i], map, Rot4.North);
+			}
+			for (int i = 0; i < line2.Count; i++)
+			{
+				GenSpawn.Spawn(pipeDef, line2[i], map, Rot4.North);
+			}
+			ProcessDelayedActions();
+
+			CompPipeNetworkMember? memA = tankA.GetComp<CompPipeNetworkMember>();
+			CompPipeNetworkMember? memB = tankB.GetComp<CompPipeNetworkMember>();
+			if (memA == null || memB == null || memA.Containers.Count == 0 || memB.Containers.Count == 0)
+			{
+				return "环路拆段回归失败：储罐缺少 CompPipeNetworkMember";
+			}
+			Container ca = memA.Containers[0];
+			Container cb = memB.Containers[0];
+			bool hasBefore = HasFlowMappingBetween(ca, cb);
+
+			// 拆除南线中间一段管道（(3,0)），触发 DeregisterPipeCell → Enqueue(PipeChanged)
+			IntVec3 cutCell = new IntVec3(3, 0, 0);
+			bool cut = false;
+			List<Thing> things = cutCell.GetThingList(map);
+			for (int i = things.Count - 1; i >= 0; i--)
+			{
+				if (things[i].def == pipeDef)
+				{
+					things[i].Destroy(DestroyMode.KillFinalize);
+					cut = true;
+					break;
+				}
+			}
+			if (!cut)
+			{
+				return "环路拆段回归失败：未找到南线中间段管道";
+			}
+			ProcessDelayedActions();
+
+			bool hasAfter = HasFlowMappingBetween(ca, cb);
+			return hasBefore && hasAfter
+				? "环路拆段回归通过"
+				: $"环路拆段回归失败（拆前有={hasBefore} 拆后仍有={hasAfter}）";
+		}
+		finally
+		{
+			// 清理测试场景：2 罐 + 13 管（拆掉的 1 段已 Destroy），避免遗留图面并汇入管网
+			RimPipeDebugUtil.DestroyAt(map, aPos);
+			RimPipeDebugUtil.DestroyAt(map, bPos);
+			for (int i = 0; i < line1.Count; i++)
+			{
+				RimPipeDebugUtil.DestroyAt(map, line1[i]);
+			}
+			for (int i = 0; i < line2.Count; i++)
+			{
+				RimPipeDebugUtil.DestroyAt(map, line2[i]);
+			}
+		}
+	}
+
+	/// <summary>扫 mappings 判断两个容器间是否存在 Flow mapping。</summary>
+	public bool HasFlowMappingBetween(Container a, Container b)
+	{
+		if (a == null || b == null || a.id < 0 || b.id < 0)
+		{
+			return false;
+		}
+		long key = ContainerPairKey(a.id, b.id, MappingType.Flow);
+		for (int i = 0; i < mappings.Count; i++)
+		{
+			Mapping m = mappings[i];
+			if (m.mappingType != MappingType.Flow || m.IsIncomplete || m.containerA == null || m.containerB == null)
+			{
+				continue;
+			}
+			if (ContainerPairKey(m.containerA.id, m.containerB.id, MappingType.Flow) == key)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/// <summary>拓扑快照（容器对 key 集合 + 连通域划分），用于局部/整图等价比对。</summary>
+	private string SnapshotTopologyString()
+	{
+		StringBuilder sb = new StringBuilder();
+		// 1) 容器对 key 集合
+		List<long> keys = new List<long>();
+		for (int i = 0; i < mappings.Count; i++)
+		{
+			Mapping m = mappings[i];
+			if (m.IsIncomplete || m.containerA == null || m.containerB == null
+				|| m.containerA.id < 0 || m.containerB.id < 0)
+			{
+				continue;
+			}
+			keys.Add(ContainerPairKey(m.containerA.id, m.containerB.id, m.mappingType));
+		}
+		keys.Sort();
+		sb.Append("keys=");
+		for (int i = 0; i < keys.Count; i++)
+		{
+			if (i > 0)
+			{
+				sb.Append(',');
+			}
+			sb.Append(keys[i]);
+		}
+
+		// 2) 连通域划分：按 mappings 连通关系（不依赖 netId 编号，只比连通构成）
+		List<Container> all = new List<Container>();
+		for (int i = 0; i < members.Count; i++)
+		{
+			CompPipeNetworkMember mem = members[i];
+			if (mem?.Containers == null)
+			{
+				continue;
+			}
+			for (int c = 0; c < mem.Containers.Count; c++)
+			{
+				if (mem.Containers[c] != null)
+				{
+					all.Add(mem.Containers[c]);
+				}
+			}
+		}
+		Dictionary<Container, int> indexOf = new Dictionary<Container, int>();
+		for (int i = 0; i < all.Count; i++)
+		{
+			indexOf[all[i]] = i;
+		}
+		int[] parent = new int[all.Count];
+		for (int i = 0; i < parent.Length; i++)
+		{
+			parent[i] = i;
+		}
+		int Find(int x)
+		{
+			while (parent[x] != x)
+			{
+				parent[x] = parent[parent[x]];
+				x = parent[x];
+			}
+			return x;
+		}
+		void Union(int a, int b)
+		{
+			int ra = Find(a);
+			int rb = Find(b);
+			if (ra != rb)
+			{
+				parent[rb] = ra;
+			}
+		}
+		for (int i = 0; i < mappings.Count; i++)
+		{
+			Mapping m = mappings[i];
+			if (m.IsIncomplete || m.containerA == null || m.containerB == null)
+			{
+				continue;
+			}
+			if (!indexOf.TryGetValue(m.containerA, out int ia) || !indexOf.TryGetValue(m.containerB, out int ib))
+			{
+				continue;
+			}
+			Union(ia, ib);
+		}
+		Dictionary<int, List<int>> groups = new Dictionary<int, List<int>>();
+		for (int i = 0; i < all.Count; i++)
+		{
+			int root = Find(i);
+			if (!groups.TryGetValue(root, out List<int>? ids))
+			{
+				ids = new List<int>();
+				groups[root] = ids;
+			}
+			ids.Add(all[i].id);
+		}
+		List<List<int>> domains = new List<List<int>>(groups.Values);
+		for (int i = 0; i < domains.Count; i++)
+		{
+			domains[i].Sort();
+		}
+		domains.Sort((x, y) => x[0].CompareTo(y[0]));
+		sb.Append(" domains=");
+		for (int d = 0; d < domains.Count; d++)
+		{
+			if (d > 0)
+			{
+				sb.Append(';');
+			}
+			sb.Append('[');
+			for (int i = 0; i < domains[d].Count; i++)
+			{
+				if (i > 0)
+				{
+					sb.Append(',');
+				}
+				sb.Append(domains[d][i]);
+			}
+			sb.Append(']');
+		}
+		return sb.ToString();
 	}
 
 	/// <summary>
@@ -933,6 +1975,81 @@ public class MapComponent_PipeNetwork : MapComponent
 		return s == PipeNetworkSleepState.Busy || s == PipeNetworkSleepState.AmbientOnly;
 	}
 
+	/// <summary>netId 越界按 Busy 处理（对齐 <see cref="GetNetSleepState"/> 的回退）。</summary>
+	private bool IsNetBusy(int netId)
+	{
+		if (netId < 0 || netId >= sleepStates.Length)
+		{
+			return true;
+		}
+		return sleepStates[netId] == PipeNetworkSleepState.Busy;
+	}
+
+	/// <summary>netId 越界按 Busy 处理（对齐 <see cref="GetNetSleepState"/> 的回退）。</summary>
+	private bool IsNetLightCommit(int netId)
+	{
+		if (netId < 0 || netId >= sleepStates.Length)
+		{
+			return true;
+		}
+		PipeNetworkSleepState s = sleepStates[netId];
+		return s == PipeNetworkSleepState.Busy || s == PipeNetworkSleepState.AmbientOnly;
+	}
+
+	/// <summary>
+	/// 批级缓存惰性重建：Busy Flow / Busy Heat 边、light Flow 边、light 构件。
+	/// 批内休眠态恒定，因此只在失效点（拓扑重建 / 休眠定态 / 唤醒 / 注册注销）置脏后重建，
+	/// 各批入口先确保新鲜，省掉每批对全图 mappings / members 的多次扫描。
+	/// </summary>
+	private void EnsureBatchCachesFresh()
+	{
+		if (!batchCachesDirty)
+		{
+			return;
+		}
+		batchCachesDirty = false;
+		busyFlowMappings.Clear();
+		busyHeatMappings.Clear();
+		lightFlowMappings.Clear();
+		lightCommitMembers.Clear();
+		for (int i = 0; i < mappings.Count; i++)
+		{
+			Mapping m = mappings[i];
+			if (m.mappingType == MappingType.Flow)
+			{
+				if (IsNetBusy(m.netId))
+				{
+					busyFlowMappings.Add(m);
+				}
+				if (IsNetLightCommit(m.netId))
+				{
+					lightFlowMappings.Add(m);
+				}
+			}
+			else if (m.mappingType == MappingType.Heat && IsNetBusy(m.netId))
+			{
+				busyHeatMappings.Add(m);
+			}
+		}
+		for (int i = 0; i < members.Count; i++)
+		{
+			CompPipeNetworkMember mem = members[i];
+			if (mem?.Containers == null || mem.Containers.Count == 0)
+			{
+				continue;
+			}
+			for (int c = 0; c < mem.Containers.Count; c++)
+			{
+				Container? cont = mem.Containers[c];
+				if (cont != null && IsNetLightCommit(cont.netId))
+				{
+					lightCommitMembers.Add(mem);
+					break;
+				}
+			}
+		}
+	}
+
 	/// <summary>由 CompPipeCell.breached 重刷路径 Mapping.leakOpen。</summary>
 	private void ApplyBreachLeakFlags()
 	{
@@ -968,22 +2085,32 @@ public class MapComponent_PipeNetwork : MapComponent
 		for (int i = 0; i < members.Count; i++)
 		{
 			CompPipeNetworkMember member = members[i];
-			ThingWithComps? parent = member?.parent;
-			if (parent == null || !parent.Spawned)
+			if (member?.parent == null || !member.parent.Spawned)
 			{
 				continue;
 			}
-			List<ThingComp> comps = parent.AllComps;
-			if (comps == null)
+			BuildInternalMappingsFor(member, linkedPairs);
+		}
+	}
+
+	/// <summary>对单个构件调用其内部映射贡献者（阀门/泵/换热器/第三方设备）。</summary>
+	private void BuildInternalMappingsFor(CompPipeNetworkMember member, HashSet<long> linkedPairs)
+	{
+		ThingWithComps? parent = member?.parent;
+		if (parent == null || !parent.Spawned)
+		{
+			return;
+		}
+		List<ThingComp> comps = parent.AllComps;
+		if (comps == null)
+		{
+			return;
+		}
+		for (int c = 0; c < comps.Count; c++)
+		{
+			if (comps[c] is IPipeInternalMappingContributor contributor)
 			{
-				continue;
-			}
-			for (int c = 0; c < comps.Count; c++)
-			{
-				if (comps[c] is IPipeInternalMappingContributor contributor)
-				{
-					contributor.ContributeInternalMapping(this, linkedPairs);
-				}
+				contributor.ContributeInternalMapping(this, linkedPairs);
 			}
 		}
 	}
@@ -1200,15 +2327,15 @@ public class MapComponent_PipeNetwork : MapComponent
 				continue;
 			}
 
-			// 1) 收集本管道连通分量
-			List<IntVec3> component = new List<IntVec3>();
+			// 收集本管道连通分量（4 邻，cellToPipe 可达）
+			HashSet<IntVec3> componentSet = new HashSet<IntVec3>();
 			Queue<IntVec3> flood = new Queue<IntVec3>();
 			flood.Enqueue(seed);
 			visitedPipe.Add(seed);
+			componentSet.Add(seed);
 			while (flood.Count > 0)
 			{
 				IntVec3 c = flood.Dequeue();
-				component.Add(c);
 				foreach (IntVec3 dir in GenAdj.CardinalDirections)
 				{
 					IntVec3 n = c + dir;
@@ -1218,94 +2345,103 @@ public class MapComponent_PipeNetwork : MapComponent
 					}
 					visitedPipe.Add(n);
 					flood.Enqueue(n);
+					componentSet.Add(n);
 				}
 			}
+			BuildPipeComponent(componentSet, linkedPairs);
+		}
+	}
 
-			HashSet<IntVec3> componentSet = new HashSet<IntVec3>(component);
+	/// <summary>
+	/// 对单个管道连通分量：附件收集（扫 members×ports，outerCell ∈ 分量）+ 多源 BFS Voronoi 交界建 Mapping。
+	/// 局部重建与整图重建共用（分量级主体）。
+	/// </summary>
+	private void BuildPipeComponent(HashSet<IntVec3> componentSet, HashSet<long> linkedPairs)
+	{
+		List<IntVec3> component = new List<IntVec3>(componentSet);
 
-			// 2) 找出所有外一格落在本分量上的端口挂接
-			List<PipeAttachment> attachments = new List<PipeAttachment>();
-			for (int i = 0; i < members.Count; i++)
-			{
-				CompPipeNetworkMember m = members[i];
-				if (m?.parent == null || !m.parent.Spawned)
-				{
-					continue;
-				}
-				for (int p = 0; p < m.Ports.Count; p++)
-				{
-					Port port = m.Ports[p];
-					IntVec3 outer = port.OuterCell;
-					if (!componentSet.Contains(outer))
-					{
-						continue;
-					}
-					Container? cont = port.Container;
-					if (cont == null)
-					{
-						continue;
-					}
-					attachments.Add(new PipeAttachment
-					{
-						member = m,
-						port = port,
-						container = cont,
-						outerCell = outer
-					});
-				}
-			}
-			if (attachments.Count < 2)
+		// 1) 找出所有外一格落在本分量上的端口挂接
+		List<PipeAttachment> attachments = new List<PipeAttachment>();
+		for (int i = 0; i < members.Count; i++)
+		{
+			CompPipeNetworkMember m = members[i];
+			if (m?.parent == null || !m.parent.Spawned)
 			{
 				continue;
 			}
-
-			// 3) 多源 BFS：每个挂接点 outerCell 为领地种子，交界建 Mapping
-			Dictionary<IntVec3, int> owner = new Dictionary<IntVec3, int>();
-			Queue<IntVec3> q = new Queue<IntVec3>();
-			for (int i = 0; i < attachments.Count; i++)
+			for (int p = 0; p < m.Ports.Count; p++)
 			{
-				IntVec3 cell = attachments[i].outerCell;
-				if (owner.ContainsKey(cell))
+				Port port = m.Ports[p];
+				IntVec3 outer = port.OuterCell;
+				if (!componentSet.Contains(outer))
 				{
-					// 两端口抢同一格：直接视为邻接
-					int other = owner[cell];
-					if (other != i)
+					continue;
+				}
+				Container? cont = port.Container;
+				if (cont == null)
+				{
+					continue;
+				}
+				attachments.Add(new PipeAttachment
+				{
+					member = m,
+					port = port,
+					container = cont,
+					outerCell = outer
+				});
+			}
+		}
+		if (attachments.Count < 2)
+		{
+			return;
+		}
+
+		// 2) 多源 BFS：每个挂接点 outerCell 为领地种子，交界建 Mapping
+		Dictionary<IntVec3, int> owner = new Dictionary<IntVec3, int>();
+		Queue<IntVec3> q = new Queue<IntVec3>();
+		for (int i = 0; i < attachments.Count; i++)
+		{
+			IntVec3 cell = attachments[i].outerCell;
+			if (owner.ContainsKey(cell))
+			{
+				// 两端口抢同一格：直接视为邻接
+				int other = owner[cell];
+				if (other != i)
+				{
+					AddPipePair(attachments[other], attachments[i], linkedPairs, component, componentSet);
+				}
+				continue;
+			}
+			owner[cell] = i;
+			q.Enqueue(cell);
+		}
+
+		HashSet<long> borderPairs = new HashSet<long>();
+		while (q.Count > 0)
+		{
+			IntVec3 cell = q.Dequeue();
+			int id = owner[cell];
+			foreach (IntVec3 dir in GenAdj.CardinalDirections)
+			{
+				IntVec3 n = cell + dir;
+				if (!componentSet.Contains(n))
+				{
+					continue;
+				}
+				if (owner.TryGetValue(n, out int otherId))
+				{
+					if (otherId != id)
 					{
-						AddPipePair(attachments[other], attachments[i], linkedPairs, component, componentSet);
+						long key = PairKey(id, otherId);
+						if (borderPairs.Add(key))
+						{
+							AddPipePair(attachments[id], attachments[otherId], linkedPairs, component, componentSet);
+						}
 					}
 					continue;
 				}
-				owner[cell] = i;
-				q.Enqueue(cell);
-			}
-
-			HashSet<long> borderPairs = new HashSet<long>();
-			while (q.Count > 0)
-			{
-				IntVec3 cell = q.Dequeue();
-				int id = owner[cell];
-				foreach (IntVec3 dir in GenAdj.CardinalDirections)
-				{
-					IntVec3 n = cell + dir;
-					if (!componentSet.Contains(n))
-					{
-						continue;
-					}
-					if (owner.TryGetValue(n, out int otherId))
-					{
-						if (otherId != id)
-						{
-							long key = PairKey(id, otherId);
-							if (borderPairs.Add(key))
-							{
-								AddPipePair(attachments[id], attachments[otherId], linkedPairs, component, componentSet);
-							}
-						}
-						continue;
-					}
-					owner[n] = id;
-					q.Enqueue(n);
-				}
+				owner[n] = id;
+				q.Enqueue(n);
 			}
 		}
 	}
@@ -1528,25 +2664,11 @@ public class MapComponent_PipeNetwork : MapComponent
 		// maxFlowRate 是整批上限。虚拟量多轮欠松弛；每轮必须用 Jacobi（基于本轮初值同步提交），
 		// 禁止边算边写，否则入流竞争时 Mapping 列表顺序会导致左右不对称（见 Player.log 对称失败）。
 		pendingDeltas.Clear();
-		for (int i = 0; i < mappings.Count; i++)
+		EnsureBatchCachesFresh();
+		// 批进入时本批字段必然已清（上一批 Commit 已全量 ClearBatch），只需清缓存内 Busy 边。
+		for (int i = 0; i < busyFlowMappings.Count; i++)
 		{
-			if (mappings[i].mappingType == MappingType.Flow)
-			{
-				mappings[i].ClearBatch();
-			}
-		}
-
-		// 只收一遍 Busy 网的 Flow 边，后续 12 轮 Jacobi 只在这份小列表上跑。
-		// 批内休眠状态恒定，效果与原来每轮逐边检查 netId 完全一致，但省掉每轮全图扫描。
-		busyFlowMappings.Clear();
-		for (int i = 0; i < mappings.Count; i++)
-		{
-			Mapping m = mappings[i];
-			if (m.mappingType != MappingType.Flow || !NetAllowsAccumulate(m.netId))
-			{
-				continue;
-			}
-			busyFlowMappings.Add(m);
+			busyFlowMappings[i].ClearBatch();
 		}
 
 		// 虚拟量只种子 Busy 边两端；非 Busy 容器本批不会动，无需进表（等价旧实现的全量种子）。
@@ -1655,24 +2777,10 @@ public class MapComponent_PipeNetwork : MapComponent
 	private void AccumulateHeat()
 	{
 		pendingTempDeltas.Clear();
-		for (int i = 0; i < mappings.Count; i++)
+		EnsureBatchCachesFresh();
+		for (int i = 0; i < busyHeatMappings.Count; i++)
 		{
-			if (mappings[i].mappingType == MappingType.Heat)
-			{
-				mappings[i].ClearBatch();
-			}
-		}
-
-		// 与 AccumulateFlow 同法：只收 Busy 网的 Heat 边，迭代只跑这份小列表。
-		busyHeatMappings.Clear();
-		for (int i = 0; i < mappings.Count; i++)
-		{
-			Mapping m = mappings[i];
-			if (m.mappingType != MappingType.Heat || !NetAllowsAccumulate(m.netId))
-			{
-				continue;
-			}
-			busyHeatMappings.Add(m);
+			busyHeatMappings[i].ClearBatch();
 		}
 
 		heatVirtual.Clear();
@@ -1929,18 +3037,12 @@ public class MapComponent_PipeNetwork : MapComponent
 	/// </summary>
 	private void ProcessLeakDeltas()
 	{
+		EnsureBatchCachesFresh();
 		leakWants.Clear();
-		for (int i = 0; i < mappings.Count; i++)
+		// 只迭代 light（Busy∪AmbientOnly）网的 Flow 边；leakOpen / IsIncomplete 仍逐边读，语义不变。
+		for (int i = 0; i < lightFlowMappings.Count; i++)
 		{
-			Mapping m = mappings[i];
-			if (m.mappingType != MappingType.Flow)
-			{
-				continue;
-			}
-			if (!NetAllowsLightCommit(m.netId))
-			{
-				continue;
-			}
+			Mapping m = lightFlowMappings[i];
 			if (m.leakOpen)
 			{
 				float half = m.maxFlowRate * 0.5f;
@@ -1966,9 +3068,10 @@ public class MapComponent_PipeNetwork : MapComponent
 			}
 		}
 
-		for (int i = 0; i < members.Count; i++)
+		// 只迭代含 light 网容器的构件；逐容器仍保留网态检查（同构件容器可能分属不同网）。
+		for (int i = 0; i < lightCommitMembers.Count; i++)
 		{
-			CompPipeNetworkMember mem = members[i];
+			CompPipeNetworkMember mem = lightCommitMembers[i];
 			if (mem?.parent == null || !mem.parent.Spawned)
 			{
 				continue;
@@ -2025,10 +3128,12 @@ public class MapComponent_PipeNetwork : MapComponent
 	/// </summary>
 	private void ApplyFlowMixing()
 	{
-		for (int i = 0; i < mappings.Count; i++)
+		EnsureBatchCachesFresh();
+		// 只有 Busy 网会产生 batchWant；缓存内全为 Flow 边，等价原「全扫 + 类型/网态过滤」。
+		for (int i = 0; i < busyFlowMappings.Count; i++)
 		{
-			Mapping m = mappings[i];
-			if (m.mappingType != MappingType.Flow || m.batchWant <= FlowSolver.AmountEpsilon
+			Mapping m = busyFlowMappings[i];
+			if (m.batchWant <= FlowSolver.AmountEpsilon
 				|| m.batchSource == null || m.batchTarget == null)
 			{
 				continue;
@@ -2078,9 +3183,11 @@ public class MapComponent_PipeNetwork : MapComponent
 	/// </summary>
 	private void ApplyAmbientHeatExchange()
 	{
-		for (int i = 0; i < members.Count; i++)
+		EnsureBatchCachesFresh();
+		// 只迭代含 light 网容器的构件（FullyQuiet 网成员不进场）；逐容器仍保留网态检查。
+		for (int i = 0; i < lightCommitMembers.Count; i++)
 		{
-			CompPipeNetworkMember mem = members[i];
+			CompPipeNetworkMember mem = lightCommitMembers[i];
 			if (mem?.parent == null || !mem.parent.Spawned)
 			{
 				continue;
@@ -2202,6 +3309,7 @@ public class MapComponent_PipeNetwork : MapComponent
 		if (netCount <= 0)
 		{
 			sleepStates = System.Array.Empty<PipeNetworkSleepState>();
+			batchCachesDirty = true;
 			return;
 		}
 		EnsureReevalCapacity();
@@ -2369,6 +3477,7 @@ public class MapComponent_PipeNetwork : MapComponent
 				sleepStates[n] = PipeNetworkSleepState.FullyQuiet;
 			}
 		}
+		batchCachesDirty = true;
 	}
 
 	private void MarkBusyIfValidNet(Container? c)
