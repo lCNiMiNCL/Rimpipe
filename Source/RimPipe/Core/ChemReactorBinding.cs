@@ -21,9 +21,6 @@ public class ChemReactorBinding
 	/// <summary>注册者键（Comp 或 Debug）；用于注销。</summary>
 	public object? owner;
 
-	/// <summary>本批 Acc 预览 / Commit 后实绩。</summary>
-	public float batchN;
-
 	public float lastBatchN;
 
 	/// <summary>P4：上一批效率 η。</summary>

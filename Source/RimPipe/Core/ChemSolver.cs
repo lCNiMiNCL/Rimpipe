@@ -146,7 +146,8 @@ public static class ChemSolver
 		bool enabled,
 		float mixRatio,
 		out float efficiency,
-		out string? failReason)
+		out string? failReason,
+		List<float>? perInOut = null)
 	{
 		efficiency = 1f;
 		failReason = null;
@@ -172,7 +173,8 @@ public static class ChemSolver
 			return 0f;
 		}
 
-		List<float> perIn = new List<float>();
+		// 传入 perInOut 则复用（批处理路径传 MapComp 的 scratch），避免每次调用分配列表
+		List<float> perIn = perInOut ?? new List<float>();
 		if (!TryGetInputPerBatch(reaction, mixRatio, perIn, out failReason))
 		{
 			return 0f;
@@ -222,7 +224,7 @@ public static class ChemSolver
 				failReason = $"output[{i}]null";
 				return 0f;
 			}
-			if (c.amount > FlowSolver.AmountEpsilon && c.fluid != null && c.fluid != row.fluid)
+			if (c.amount > FlowSolver.AmountEpsilon && c.fluid != row.fluid)
 			{
 				failReason = $"output[{i}]fluid";
 				return 0f;
@@ -267,17 +269,27 @@ public static class ChemSolver
 		float n,
 		float mixRatio,
 		float efficiency,
-		List<(Container c, float delta)> into)
+		List<(Container c, float delta)> into,
+		List<float>? precomputedPerIn = null)
 	{
 		into.Clear();
 		if (n <= FlowSolver.AmountEpsilon)
 		{
 			return;
 		}
-		List<float> perIn = new List<float>();
-		if (!TryGetInputPerBatch(reaction, mixRatio, perIn, out _))
+		// 批处理路径已由 ComputeBatchCount 算好 perIn，直接复用避免同批双算
+		List<float> perIn;
+		if (precomputedPerIn != null)
 		{
-			return;
+			perIn = precomputedPerIn;
+		}
+		else
+		{
+			perIn = new List<float>();
+			if (!TryGetInputPerBatch(reaction, mixRatio, perIn, out _))
+			{
+				return;
+			}
 		}
 		for (int i = 0; i < reaction.inputs.Count; i++)
 		{

@@ -58,19 +58,11 @@ public class CompPipeValve : ThingComp, IPipeInternalMappingContributor
 	{
 		internalMapping = null;
 		CompPipeNetworkMember? member = parent.GetComp<CompPipeNetworkMember>();
-		if (member == null || !parent.Spawned)
+		if (!MapComponent_PipeNetwork.TryResolveContainers(member, Props.containerIndexA, Props.containerIndexB, "阀门", out Container? a, out Container? b)
+			|| a == null || b == null)
 		{
 			return;
 		}
-		int ia = Props.containerIndexA;
-		int ib = Props.containerIndexB;
-		if (ia < 0 || ib < 0 || ia >= member.Containers.Count || ib >= member.Containers.Count)
-		{
-			Log.Error($"[RimPipe] 阀门 {parent.LabelCap} 容器索引越界 A={ia} B={ib} count={member.Containers.Count}");
-			return;
-		}
-		Container a = member.Containers[ia];
-		Container b = member.Containers[ib];
 		internalMapping = net.AddInternalMapping(a, b, parent as Building, EffectiveMaxFlowRate, linkedPairs);
 	}
 

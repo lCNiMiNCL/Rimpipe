@@ -32,8 +32,25 @@ public class MapComponent_PipeNetwork : MapComponent
 	private readonly Dictionary<Container, float> pendingTempDeltas = new Dictionary<Container, float>();
 	private readonly List<ChemReactorBinding> chemReactors = new List<ChemReactorBinding>();
 	private readonly List<(Container c, float delta)> chemDeltaScratch = new List<(Container, float)>();
+	private readonly List<float> chemPerInScratch = new List<float>();
+	private readonly List<(Container c, float leak, IntVec3 cell)> leakWants = new List<(Container, float, IntVec3)>();
+	private readonly Dictionary<Container, float> leakSum = new Dictionary<Container, float>();
 	private readonly List<DelayedAction> delayedActions = new List<DelayedAction>();
 	private bool needsFullRebuild = true;
+
+	// —— 批级复用缓冲：AccumulateFlow / AccumulateHeat 每批都要用虚拟量和求和，
+	// 这些容器作为字段复用，避免 Busy 批每批新建 List/Dict 造成 GC 压力（§7.10.7 记录的 Acc 内分配）。
+	private readonly Dictionary<Container, float> flowVirtual = new Dictionary<Container, float>();
+	private readonly List<Mapping> busyFlowMappings = new List<Mapping>();
+	private readonly List<(Mapping map, Container src, Container tgt, float want)> flowWants = new List<(Mapping, Container, Container, float)>();
+	private readonly Dictionary<Container, float> flowOutSum = new Dictionary<Container, float>();
+	private readonly Dictionary<Container, float> flowInSum = new Dictionary<Container, float>();
+	private readonly Dictionary<Container, float> flowStepDelta = new Dictionary<Container, float>();
+
+	private readonly Dictionary<Container, float> heatVirtual = new Dictionary<Container, float>();
+	private readonly List<Mapping> busyHeatMappings = new List<Mapping>();
+	private readonly List<(Mapping map, Container hot, Container cold, float q)> heatWants = new List<(Mapping, Container, Container, float)>();
+	private readonly Dictionary<Container, float> heatStepDelta = new Dictionary<Container, float>();
 
 	/// <summary>这张地图存档里记下的 schema 版本号。</summary>
 	private int rimPipeSchemaVersion = CurrentSchemaVersion;
@@ -41,6 +58,10 @@ public class MapComponent_PipeNetwork : MapComponent
 	/// <summary>每个连通网各自的休眠状态；下标就是 netId。不写进存档。</summary>
 	private PipeNetworkSleepState[] sleepStates = System.Array.Empty<PipeNetworkSleepState>();
 	private int netCount;
+
+	/// <summary>休眠重评估的单遍聚合标志（复用，避免每批分配）。不写进存档。</summary>
+	private bool[] reevalBusy = System.Array.Empty<bool>();
+	private bool[] reevalAmb = System.Array.Empty<bool>();
 
 	/// <summary>DevMode 下是否画流量/压力 Overlay。不写进存档。</summary>
 	public bool showFlowPressureOverlay;
@@ -53,6 +74,11 @@ public class MapComponent_PipeNetwork : MapComponent
 
 	/// <summary>最近一次 <see cref="RebuildAllMappings"/> 耗时（毫秒）。不写进存档。</summary>
 	public float LastTopologyRebuildMs { get; private set; }
+
+	/// <summary>最近一次批处理各阶段的耗时（毫秒），供 Benchmark 对照 §7.10.7。不写进存档。</summary>
+	public float LastAccumulateMs { get; private set; }
+	public float LastCommitMs { get; private set; }
+	public float LastReevaluateMs { get; private set; }
 
 	public int SchemaVersion => rimPipeSchemaVersion;
 
@@ -195,22 +221,41 @@ public class MapComponent_PipeNetwork : MapComponent
 		{
 			if (anyBusy)
 			{
+				Stopwatch sw = Stopwatch.StartNew();
 				AccumulateFlow();
 				AccumulateHeat();
-				AccumulateChem();
+				sw.Stop();
+				LastAccumulateMs = (float)sw.Elapsed.TotalMilliseconds;
+			}
+			else
+			{
+				LastAccumulateMs = 0f;
 			}
 		}
 		else if (phase == 19)
 		{
 			if (anyBusy)
 			{
+				Stopwatch sw = Stopwatch.StartNew();
 				CommitDeltas();
+				sw.Stop();
+				LastCommitMs = (float)sw.Elapsed.TotalMilliseconds;
 			}
 			else if (anyAmb)
 			{
+				Stopwatch sw = Stopwatch.StartNew();
 				CommitAmbientAndLeaksOnly();
+				sw.Stop();
+				LastCommitMs = (float)sw.Elapsed.TotalMilliseconds;
 			}
+			else
+			{
+				LastCommitMs = 0f;
+			}
+			Stopwatch swR = Stopwatch.StartNew();
 			ReevaluateAllNetSleepStates();
+			swR.Stop();
+			LastReevaluateMs = (float)swR.Elapsed.TotalMilliseconds;
 		}
 	}
 
@@ -855,6 +900,16 @@ public class MapComponent_PipeNetwork : MapComponent
 		sleepStates = next;
 	}
 
+	private void EnsureReevalCapacity()
+	{
+		if (reevalBusy.Length >= netCount && reevalAmb.Length >= netCount)
+		{
+			return;
+		}
+		reevalBusy = new bool[netCount];
+		reevalAmb = new bool[netCount];
+	}
+
 	private bool HasAnyNetState(PipeNetworkSleepState state)
 	{
 		for (int i = 0; i < sleepStates.Length; i++)
@@ -931,6 +986,31 @@ public class MapComponent_PipeNetwork : MapComponent
 				}
 			}
 		}
+	}
+
+	/// <summary>同建筑内部 Mapping（阀 / 泵 / 换热器）。rate 与 drive / type 由调用方给定。</summary>
+	public static bool TryResolveContainers(
+		CompPipeNetworkMember? member,
+		int indexA,
+		int indexB,
+		string label,
+		out Container? a,
+		out Container? b)
+	{
+		a = null;
+		b = null;
+		if (member == null || member.parent == null || !member.parent.Spawned)
+		{
+			return false;
+		}
+		if (indexA < 0 || indexB < 0 || indexA >= member.Containers.Count || indexB >= member.Containers.Count)
+		{
+			Log.Error($"[RimPipe] {label} {member.parent.LabelCap} 容器索引越界 A={indexA} B={indexB} count={member.Containers.Count}");
+			return false;
+		}
+		a = member.Containers[indexA];
+		b = member.Containers[indexB];
+		return true;
 	}
 
 	/// <summary>同建筑内部 Mapping（阀 / 泵 / 换热器）。rate 与 drive / type 由调用方给定。</summary>
@@ -1060,9 +1140,14 @@ public class MapComponent_PipeNetwork : MapComponent
 
 	/// <summary>
 	/// 管道贴着构件但未进任何端口外一格时打日志，便于发现「接了管却不进 Mapping」。
+	/// 仅 DevMode 且非套件批量时执行：正常布局（管道贴双口构件侧面/背面）不该刷屏。
 	/// </summary>
 	private void WarnOrphanPipeTouches()
 	{
+		if (!Prefs.DevMode || QuietDebugLogs)
+		{
+			return;
+		}
 		HashSet<IntVec3> attachedOuters = new HashSet<IntVec3>();
 		for (int i = 0; i < members.Count; i++)
 		{
@@ -1451,65 +1536,79 @@ public class MapComponent_PipeNetwork : MapComponent
 			}
 		}
 
-		Dictionary<Container, float> virtualAmount = new Dictionary<Container, float>();
-		for (int i = 0; i < members.Count; i++)
+		// 只收一遍 Busy 网的 Flow 边，后续 12 轮 Jacobi 只在这份小列表上跑。
+		// 批内休眠状态恒定，效果与原来每轮逐边检查 netId 完全一致，但省掉每轮全图扫描。
+		busyFlowMappings.Clear();
+		for (int i = 0; i < mappings.Count; i++)
 		{
-			for (int c = 0; c < members[i].Containers.Count; c++)
+			Mapping m = mappings[i];
+			if (m.mappingType != MappingType.Flow || !NetAllowsAccumulate(m.netId))
 			{
-				Container cont = members[i].Containers[c];
-				virtualAmount[cont] = cont.amount;
+				continue;
+			}
+			busyFlowMappings.Add(m);
+		}
+
+		// 虚拟量只种子 Busy 边两端；非 Busy 容器本批不会动，无需进表（等价旧实现的全量种子）。
+		flowVirtual.Clear();
+		for (int i = 0; i < busyFlowMappings.Count; i++)
+		{
+			Mapping m = busyFlowMappings[i];
+			if (m.containerA != null)
+			{
+				flowVirtual[m.containerA] = m.containerA.amount;
+			}
+			if (m.containerB != null)
+			{
+				flowVirtual[m.containerB] = m.containerB.amount;
 			}
 		}
 
 		for (int iter = 0; iter < FlowRelaxIterations; iter++)
 		{
-			List<(Mapping map, Container src, Container tgt, float want)> wants = new List<(Mapping, Container, Container, float)>();
-			for (int i = 0; i < mappings.Count; i++)
+			flowWants.Clear();
+			for (int i = 0; i < busyFlowMappings.Count; i++)
 			{
-				Mapping m = mappings[i];
-				if (m.mappingType != MappingType.Flow || m.IsIncomplete || m.leakOpen || m.containerA == null || m.containerB == null)
+				Mapping m = busyFlowMappings[i];
+				if (m.IsIncomplete || m.leakOpen || m.containerA == null || m.containerB == null)
 				{
 					continue;
 				}
-				if (!NetAllowsAccumulate(m.netId))
-				{
-					continue;
-				}
-				float amountA = virtualAmount[m.containerA];
-				float amountB = virtualAmount[m.containerB];
+				float amountA = flowVirtual[m.containerA];
+				float amountB = flowVirtual[m.containerB];
 				float want = FlowSolver.ComputeWant(m, amountA, amountB, out Container? src, out Container? tgt, out _);
 				if (want > FlowSolver.AmountEpsilon && src != null && tgt != null)
 				{
-					wants.Add((m, src, tgt, want));
+					flowWants.Add((m, src, tgt, want));
 				}
 			}
 
-			Dictionary<Container, float> outSum = new Dictionary<Container, float>();
-			Dictionary<Container, float> inSum = new Dictionary<Container, float>();
-			for (int i = 0; i < wants.Count; i++)
+			flowOutSum.Clear();
+			flowInSum.Clear();
+			for (int i = 0; i < flowWants.Count; i++)
 			{
-				outSum.TryGetValue(wants[i].src, out float o);
-				outSum[wants[i].src] = o + wants[i].want;
-				inSum.TryGetValue(wants[i].tgt, out float inn);
-				inSum[wants[i].tgt] = inn + wants[i].want;
+				flowOutSum.TryGetValue(flowWants[i].src, out float o);
+				flowOutSum[flowWants[i].src] = o + flowWants[i].want;
+				flowInSum.TryGetValue(flowWants[i].tgt, out float inn);
+				flowInSum[flowWants[i].tgt] = inn + flowWants[i].want;
 			}
 
 			// 本轮净增量（相对本轮初值），全部算完再写回
-			Dictionary<Container, float> stepDelta = new Dictionary<Container, float>();
-			for (int i = 0; i < wants.Count; i++)
+			flowStepDelta.Clear();
+			for (int i = 0; i < flowWants.Count; i++)
 			{
-				Mapping m = wants[i].map;
-				Container src = wants[i].src;
-				Container tgt = wants[i].tgt;
-				float w = wants[i].want;
-				float srcAmt = virtualAmount[src];
-				float tgtAmt = virtualAmount[tgt];
-				if (outSum.TryGetValue(src, out float os) && os > srcAmt + FlowSolver.AmountEpsilon)
+				Mapping m = flowWants[i].map;
+				Container src = flowWants[i].src;
+				Container tgt = flowWants[i].tgt;
+				float w = flowWants[i].want;
+				float srcAmt = flowVirtual[src];
+				float tgtAmt = flowVirtual[tgt];
+				if (flowOutSum.TryGetValue(src, out float os) && os > srcAmt + FlowSolver.AmountEpsilon)
 				{
 					w *= srcAmt / os;
 				}
 				float free = tgt.capacity - tgtAmt;
-				if (inSum.TryGetValue(tgt, out float ins) && ins > free + FlowSolver.AmountEpsilon)
+				if (flowInSum.TryGetValue(tgt, out float ins) && ins > free + FlowSolver.AmountEpsilon)
 				{
 					w *= free / ins;
 				}
@@ -1518,18 +1617,18 @@ public class MapComponent_PipeNetwork : MapComponent
 				{
 					continue;
 				}
-				stepDelta.TryGetValue(src, out float ds);
-				stepDelta[src] = ds - w;
-				stepDelta.TryGetValue(tgt, out float dt);
-				stepDelta[tgt] = dt + w;
+				flowStepDelta.TryGetValue(src, out float ds);
+				flowStepDelta[src] = ds - w;
+				flowStepDelta.TryGetValue(tgt, out float dt);
+				flowStepDelta[tgt] = dt + w;
 				m.batchSource = src;
 				m.batchTarget = tgt;
 				m.batchWant += w;
 			}
 
-			foreach (KeyValuePair<Container, float> kv in stepDelta)
+			foreach (KeyValuePair<Container, float> kv in flowStepDelta)
 			{
-				float next = virtualAmount[kv.Key] + kv.Value;
+				float next = flowVirtual[kv.Key] + kv.Value;
 				if (next < 0f)
 				{
 					next = 0f;
@@ -1538,11 +1637,11 @@ public class MapComponent_PipeNetwork : MapComponent
 				{
 					next = kv.Key.capacity;
 				}
-				virtualAmount[kv.Key] = next;
+				flowVirtual[kv.Key] = next;
 			}
 		}
 
-		foreach (KeyValuePair<Container, float> kv in virtualAmount)
+		foreach (KeyValuePair<Container, float> kv in flowVirtual)
 		{
 			float delta = kv.Value - kv.Key.amount;
 			if (System.Math.Abs(delta) > FlowSolver.AmountEpsilon)
@@ -1564,28 +1663,39 @@ public class MapComponent_PipeNetwork : MapComponent
 			}
 		}
 
-		Dictionary<Container, float> virtualTemp = new Dictionary<Container, float>();
-		for (int i = 0; i < members.Count; i++)
+		// 与 AccumulateFlow 同法：只收 Busy 网的 Heat 边，迭代只跑这份小列表。
+		busyHeatMappings.Clear();
+		for (int i = 0; i < mappings.Count; i++)
 		{
-			for (int c = 0; c < members[i].Containers.Count; c++)
+			Mapping m = mappings[i];
+			if (m.mappingType != MappingType.Heat || !NetAllowsAccumulate(m.netId))
 			{
-				Container cont = members[i].Containers[c];
-				virtualTemp[cont] = cont.temperature;
+				continue;
+			}
+			busyHeatMappings.Add(m);
+		}
+
+		heatVirtual.Clear();
+		for (int i = 0; i < busyHeatMappings.Count; i++)
+		{
+			Mapping m = busyHeatMappings[i];
+			if (m.containerA != null)
+			{
+				heatVirtual[m.containerA] = m.containerA.temperature;
+			}
+			if (m.containerB != null)
+			{
+				heatVirtual[m.containerB] = m.containerB.temperature;
 			}
 		}
 
 		for (int iter = 0; iter < HeatRelaxIterations; iter++)
 		{
-			List<(Mapping map, Container hot, Container cold, float q)> wants = new List<(Mapping, Container, Container, float)>();
-			for (int i = 0; i < mappings.Count; i++)
+			heatWants.Clear();
+			for (int i = 0; i < busyHeatMappings.Count; i++)
 			{
-				Mapping m = mappings[i];
-				if (m.mappingType != MappingType.Heat || m.IsIncomplete || m.leakOpen
-					|| m.containerA == null || m.containerB == null)
-				{
-					continue;
-				}
-				if (!NetAllowsAccumulate(m.netId))
+				Mapping m = busyHeatMappings[i];
+				if (m.IsIncomplete || m.leakOpen || m.containerA == null || m.containerB == null)
 				{
 					continue;
 				}
@@ -1593,23 +1703,23 @@ public class MapComponent_PipeNetwork : MapComponent
 					m,
 					m.containerA.amount,
 					m.containerB.amount,
-					virtualTemp[m.containerA],
-					virtualTemp[m.containerB],
+					heatVirtual[m.containerA],
+					heatVirtual[m.containerB],
 					out Container? hot,
 					out Container? cold);
 				if (q > FlowSolver.AmountEpsilon && hot != null && cold != null)
 				{
-					wants.Add((m, hot, cold, q));
+					heatWants.Add((m, hot, cold, q));
 				}
 			}
 
-			Dictionary<Container, float> stepDelta = new Dictionary<Container, float>();
-			for (int i = 0; i < wants.Count; i++)
+			heatStepDelta.Clear();
+			for (int i = 0; i < heatWants.Count; i++)
 			{
-				Mapping m = wants[i].map;
-				Container hot = wants[i].hot;
-				Container cold = wants[i].cold;
-				float q = wants[i].q * HeatRelaxFactor;
+				Mapping m = heatWants[i].map;
+				Container hot = heatWants[i].hot;
+				Container cold = heatWants[i].cold;
+				float q = heatWants[i].q * HeatRelaxFactor;
 				float mHot = hot.amount;
 				float mCold = cold.amount;
 				if (mHot <= FlowSolver.AmountEpsilon || mCold <= FlowSolver.AmountEpsilon)
@@ -1618,22 +1728,22 @@ public class MapComponent_PipeNetwork : MapComponent
 				}
 				float dHot = -q / mHot;
 				float dCold = q / mCold;
-				stepDelta.TryGetValue(hot, out float dh);
-				stepDelta[hot] = dh + dHot;
-				stepDelta.TryGetValue(cold, out float dc);
-				stepDelta[cold] = dc + dCold;
+				heatStepDelta.TryGetValue(hot, out float dh);
+				heatStepDelta[hot] = dh + dHot;
+				heatStepDelta.TryGetValue(cold, out float dc);
+				heatStepDelta[cold] = dc + dCold;
 				m.batchSource = hot;
 				m.batchTarget = cold;
 				m.batchWant += q;
 			}
 
-			foreach (KeyValuePair<Container, float> kv in stepDelta)
+			foreach (KeyValuePair<Container, float> kv in heatStepDelta)
 			{
-				virtualTemp[kv.Key] = virtualTemp[kv.Key] + kv.Value;
+				heatVirtual[kv.Key] = heatVirtual[kv.Key] + kv.Value;
 			}
 		}
 
-		foreach (KeyValuePair<Container, float> kv in virtualTemp)
+		foreach (KeyValuePair<Container, float> kv in heatVirtual)
 		{
 			float delta = kv.Value - kv.Key.temperature;
 			if (System.Math.Abs(delta) > 1e-6f)
@@ -1665,19 +1775,9 @@ public class MapComponent_PipeNetwork : MapComponent
 		}
 	}
 
-	/// <summary>预览各绑定 batchN（休眠/Debug）；不写量。</summary>
-	private void AccumulateChem()
-	{
-		for (int i = 0; i < chemReactors.Count; i++)
-		{
-			ChemReactorBinding b = chemReactors[i];
-			b.batchN = ChemSolver.ComputeBatchCount(
-				b.reaction, b.inputs, b.outputs, b.enabled, b.mixRatio, out _, out _);
-		}
-	}
-
 	/// <summary>
 	/// 按当前量重算 n，按 mixRatio/η 扣入加出；P5b：反应热写入 pendingTempDeltas（ΔT=Q/m）。
+	/// perIn 用 chemPerInScratch 复算一次并透传给 BuildAmountDeltas，避免同批双算/双分配。
 	/// </summary>
 	private void CommitChem()
 	{
@@ -1686,8 +1786,7 @@ public class MapComponent_PipeNetwork : MapComponent
 			ChemReactorBinding b = chemReactors[i];
 			float n = ChemSolver.ComputeBatchCount(
 				b.reaction, b.inputs, b.outputs, b.enabled, b.mixRatio,
-				out float efficiency, out _);
-			b.batchN = n;
+				out float efficiency, out _, chemPerInScratch);
 			b.lastBatchN = n;
 			b.lastEfficiency = efficiency;
 			if (n <= FlowSolver.AmountEpsilon || b.reaction == null)
@@ -1695,7 +1794,7 @@ public class MapComponent_PipeNetwork : MapComponent
 				continue;
 			}
 			ChemSolver.BuildAmountDeltas(
-				b.reaction, b.inputs, b.outputs, n, b.mixRatio, efficiency, chemDeltaScratch);
+				b.reaction, b.inputs, b.outputs, n, b.mixRatio, efficiency, chemDeltaScratch, chemPerInScratch);
 			for (int d = 0; d < chemDeltaScratch.Count; d++)
 			{
 				Container c = chemDeltaScratch[d].c;
@@ -1830,7 +1929,7 @@ public class MapComponent_PipeNetwork : MapComponent
 	/// </summary>
 	private void ProcessLeakDeltas()
 	{
-		List<(Container c, float leak, IntVec3 cell)> leakWants = new List<(Container, float, IntVec3)>();
+		leakWants.Clear();
 		for (int i = 0; i < mappings.Count; i++)
 		{
 			Mapping m = mappings[i];
@@ -1892,7 +1991,7 @@ public class MapComponent_PipeNetwork : MapComponent
 			}
 		}
 
-		Dictionary<Container, float> leakSum = new Dictionary<Container, float>();
+		leakSum.Clear();
 		for (int i = 0; i < leakWants.Count; i++)
 		{
 			leakSum.TryGetValue(leakWants[i].c, out float s);
@@ -1987,7 +2086,6 @@ public class MapComponent_PipeNetwork : MapComponent
 				continue;
 			}
 			IntVec3 cell = mem.parent.Position;
-			float tamb = GenTemperature.GetTemperatureForCell(cell, map);
 			float insulation = mem.Props.insulation;
 			if (insulation < 0f)
 			{
@@ -2003,6 +2101,8 @@ public class MapComponent_PipeNetwork : MapComponent
 			{
 				continue;
 			}
+			// 查格温偏贵，放到「保温/速率可用」过滤之后再查（空罐/FullyQuiet 网不再白查）
+			float tamb = GenTemperature.GetTemperatureForCell(cell, map);
 
 			bool canPushRoomHeat = false;
 			Room? room = cell.GetRoom(map);
@@ -2104,37 +2204,64 @@ public class MapComponent_PipeNetwork : MapComponent
 			sleepStates = System.Array.Empty<PipeNetworkSleepState>();
 			return;
 		}
-		for (int n = 0; n < netCount; n++)
-		{
-			if (HasLeakOrBreachDriver(n) || HasFlowOrHeatWant(n) || HasChemWant(n))
-			{
-				sleepStates[n] = PipeNetworkSleepState.Busy;
-			}
-			else if (HasAmbientNeed(n))
-			{
-				sleepStates[n] = PipeNetworkSleepState.AmbientOnly;
-			}
-			else
-			{
-				sleepStates[n] = PipeNetworkSleepState.FullyQuiet;
-			}
-		}
-	}
+		EnsureReevalCapacity();
+		System.Array.Clear(reevalBusy, 0, netCount);
+		System.Array.Clear(reevalAmb, 0, netCount);
 
-	private bool HasLeakOrBreachDriver(int netId)
-	{
+		// 单遍聚合：一次扫完，按 netId 落 per-net 标志，替代原来的「每网各扫一遍全图」
+		// （nets × 全图迭代，且 GetTemperatureForCell 每网每成员重复查温）。
+		// 1) Flow/Heat want 与泄漏/不完整驱动
 		for (int i = 0; i < mappings.Count; i++)
 		{
 			Mapping m = mappings[i];
-			if (m.netId != netId || m.mappingType != MappingType.Flow)
+			int n = m.netId;
+			if (n < 0 || n >= netCount)
 			{
 				continue;
 			}
-			if (m.leakOpen || m.IsIncomplete)
+			if (m.mappingType == MappingType.Flow)
 			{
-				return true;
+				if (m.leakOpen || m.IsIncomplete)
+				{
+					reevalBusy[n] = true;
+					continue;
+				}
+				if (reevalBusy[n])
+				{
+					continue; // 本网已定 Busy，不再算 want（对齐原逐网早退）
+				}
+				float want = FlowSolver.ComputeWant(m, out _, out _, out _);
+				if (want > FlowSolver.AmountEpsilon)
+				{
+					reevalBusy[n] = true;
+				}
+			}
+			else if (m.mappingType == MappingType.Heat)
+			{
+				if (m.IsIncomplete || m.containerA == null || m.containerB == null)
+				{
+					continue;
+				}
+				if (reevalBusy[n])
+				{
+					continue;
+				}
+				float q = HeatSolver.ComputeHeatWant(
+					m,
+					m.containerA.amount,
+					m.containerB.amount,
+					m.containerA.temperature,
+					m.containerB.temperature,
+					out _,
+					out _);
+				if (q > FlowSolver.AmountEpsilon)
+				{
+					reevalBusy[n] = true;
+				}
 			}
 		}
+
+		// 2) 构件：破损驱动 + 环境散热需求（GetTemperatureForCell 每个构件只查一次）
 		for (int i = 0; i < members.Count; i++)
 		{
 			CompPipeNetworkMember mem = members[i];
@@ -2143,24 +2270,45 @@ public class MapComponent_PipeNetwork : MapComponent
 				continue;
 			}
 			CompPipeBreachable? br = mem.parent.TryGetComp<CompPipeBreachable>();
-			if (br == null || !br.Breached)
+			bool breached = br != null && br.Breached;
+			float insulation = mem.Props.insulation;
+			if (insulation < 0f)
 			{
-				continue;
+				insulation = 0f;
 			}
+			if (insulation > 1f)
+			{
+				insulation = 1f;
+			}
+			float leakFactor = 1f - insulation;
+			float maxRate = mem.Props.maxAmbientHeatRate;
+			bool ambEnabled = maxRate > FlowSolver.AmountEpsilon && leakFactor > FlowSolver.AmountEpsilon;
+			float tamb = ambEnabled ? GenTemperature.GetTemperatureForCell(mem.parent.Position, map) : 0f;
 			for (int c = 0; c < mem.Containers.Count; c++)
 			{
 				Container cont = mem.Containers[c];
-				if (cont.netId != netId)
+				if (cont == null)
 				{
 					continue;
 				}
-				if (cont.amount > FlowSolver.AmountEpsilon)
+				int n = cont.netId;
+				if (n < 0 || n >= netCount)
 				{
-					return true;
+					continue;
+				}
+				if (breached && cont.amount > FlowSolver.AmountEpsilon)
+				{
+					reevalBusy[n] = true;
+				}
+				if (ambEnabled && cont.amount > FlowSolver.AmountEpsilon
+					&& System.Math.Abs(cont.temperature - tamb) > HeatSolver.TempEpsilon)
+				{
+					reevalAmb[n] = true;
 				}
 			}
 		}
-		// 破损管格：凡路径 Mapping 属本网即驱动 Busy
+
+		// 3) 破损管格：凡路径 Mapping 属某网即驱动该网 Busy
 		for (int i = 0; i < pipeCells.Count; i++)
 		{
 			CompPipeCell pipe = pipeCells[i];
@@ -2174,137 +2322,66 @@ public class MapComponent_PipeNetwork : MapComponent
 			}
 			for (int j = 0; j < list.Count; j++)
 			{
-				if (list[j].netId == netId)
+				Mapping m = list[j];
+				if (m != null && m.netId >= 0 && m.netId < netCount)
 				{
-					return true;
+					reevalBusy[m.netId] = true;
 				}
 			}
 		}
-		return false;
-	}
 
-	private bool HasFlowOrHeatWant(int netId)
-	{
-		for (int i = 0; i < mappings.Count; i++)
-		{
-			Mapping m = mappings[i];
-			if (m.netId != netId || m.IsIncomplete || m.containerA == null || m.containerB == null)
-			{
-				continue;
-			}
-			if (m.mappingType == MappingType.Flow)
-			{
-				if (m.leakOpen)
-				{
-					continue;
-				}
-				float want = FlowSolver.ComputeWant(m, out _, out _, out _);
-				if (want > FlowSolver.AmountEpsilon)
-				{
-					return true;
-				}
-			}
-			else if (m.mappingType == MappingType.Heat)
-			{
-				float q = HeatSolver.ComputeHeatWant(
-					m,
-					m.containerA.amount,
-					m.containerB.amount,
-					m.containerA.temperature,
-					m.containerB.temperature,
-					out _,
-					out _);
-				if (q > FlowSolver.AmountEpsilon)
-				{
-					return true;
-				}
-			}
-		}
-		return false;
-	}
-
-	/// <summary>P2：绑定涉及本网容器且可转化 → Busy。</summary>
-	private bool HasChemWant(int netId)
-	{
+		// 4) 化学：绑定可转化则其所触及的所有网 Busy
 		for (int i = 0; i < chemReactors.Count; i++)
 		{
 			ChemReactorBinding b = chemReactors[i];
-			if (!BindingTouchesNet(b, netId))
+			if (b == null || b.reaction == null)
 			{
 				continue;
 			}
 			float n = ChemSolver.ComputeBatchCount(
 				b.reaction, b.inputs, b.outputs, b.enabled, b.mixRatio, out _, out _);
-			if (n > FlowSolver.AmountEpsilon)
-			{
-				return true;
-			}
-		}
-		return false;
-	}
-
-	private static bool BindingTouchesNet(ChemReactorBinding b, int netId)
-	{
-		if (netId < 0)
-		{
-			return true;
-		}
-		for (int i = 0; i < b.inputs.Count; i++)
-		{
-			if (b.inputs[i] != null && b.inputs[i].netId == netId)
-			{
-				return true;
-			}
-		}
-		for (int i = 0; i < b.outputs.Count; i++)
-		{
-			if (b.outputs[i] != null && b.outputs[i].netId == netId)
-			{
-				return true;
-			}
-		}
-		return false;
-	}
-
-	private bool HasAmbientNeed(int netId)
-	{
-		for (int i = 0; i < members.Count; i++)
-		{
-			CompPipeNetworkMember mem = members[i];
-			if (mem?.parent == null || !mem.parent.Spawned)
+			if (n <= FlowSolver.AmountEpsilon)
 			{
 				continue;
 			}
-			float insulation = mem.Props.insulation;
-			if (insulation < 0f)
+			for (int k = 0; k < b.inputs.Count; k++)
 			{
-				insulation = 0f;
+				MarkBusyIfValidNet(b.inputs[k]);
 			}
-			if (insulation > 1f)
+			for (int k = 0; k < b.outputs.Count; k++)
 			{
-				insulation = 1f;
-			}
-			float leakFactor = 1f - insulation;
-			float maxRate = mem.Props.maxAmbientHeatRate;
-			if (maxRate <= FlowSolver.AmountEpsilon || leakFactor <= FlowSolver.AmountEpsilon)
-			{
-				continue;
-			}
-			float tamb = GenTemperature.GetTemperatureForCell(mem.parent.Position, map);
-			for (int c = 0; c < mem.Containers.Count; c++)
-			{
-				Container cont = mem.Containers[c];
-				if (cont.netId != netId || cont.amount <= FlowSolver.AmountEpsilon)
-				{
-					continue;
-				}
-				if (System.Math.Abs(cont.temperature - tamb) > HeatSolver.TempEpsilon)
-				{
-					return true;
-				}
+				MarkBusyIfValidNet(b.outputs[k]);
 			}
 		}
-		return false;
+
+		for (int n = 0; n < netCount; n++)
+		{
+			if (reevalBusy[n])
+			{
+				sleepStates[n] = PipeNetworkSleepState.Busy;
+			}
+			else if (reevalAmb[n])
+			{
+				sleepStates[n] = PipeNetworkSleepState.AmbientOnly;
+			}
+			else
+			{
+				sleepStates[n] = PipeNetworkSleepState.FullyQuiet;
+			}
+		}
+	}
+
+	private void MarkBusyIfValidNet(Container? c)
+	{
+		if (c == null)
+		{
+			return;
+		}
+		int n = c.netId;
+		if (n >= 0 && n < netCount)
+		{
+			reevalBusy[n] = true;
+		}
 	}
 
 	/// <summary>调试：只冲刷延迟拓扑，不算流。</summary>
@@ -2334,11 +2411,19 @@ public class MapComponent_PipeNetwork : MapComponent
 	{
 		ProcessDelayedActions();
 		WakeNetwork("debugForce");
+		Stopwatch swA = Stopwatch.StartNew();
 		AccumulateFlow();
 		AccumulateHeat();
-		AccumulateChem();
+		swA.Stop();
+		LastAccumulateMs = (float)swA.Elapsed.TotalMilliseconds;
+		Stopwatch swC = Stopwatch.StartNew();
 		CommitDeltas();
+		swC.Stop();
+		LastCommitMs = (float)swC.Elapsed.TotalMilliseconds;
+		Stopwatch swR = Stopwatch.StartNew();
 		ReevaluateAllNetSleepStates();
+		swR.Stop();
+		LastReevaluateMs = (float)swR.Elapsed.TotalMilliseconds;
 	}
 
 	/// <summary>调试：仅跑 AmbientOnly 路径（泄漏+Amb），用于仅Amb断言。</summary>
@@ -2471,7 +2556,8 @@ public class MapComponent_PipeNetwork : MapComponent
 		sb.AppendLine(
 			$"[RimPipe] map schema={rimPipeSchemaVersion} members={members.Count} pipes={pipeCells.Count} mappings={mappings.Count} " +
 			$"chem={chemReactors.Count} pending={pendingDeltas.Count} nets={netCount} sleepState={SleepState} " +
-			$"(busy={busy} amb={amb} quiet={quiet}) overlay={showFlowPressureOverlay} lastTopoMs={LastTopologyRebuildMs:F3}");
+			$"(busy={busy} amb={amb} quiet={quiet}) overlay={showFlowPressureOverlay} " +
+			$"lastTopoMs={LastTopologyRebuildMs:F3} lastAccMs={LastAccumulateMs:F3} lastCommitMs={LastCommitMs:F3} lastReevalMs={LastReevaluateMs:F3}");
 		for (int n = 0; n < sleepStates.Length; n++)
 		{
 			sb.AppendLine($"  Net#{n} state={sleepStates[n]}");

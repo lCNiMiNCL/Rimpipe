@@ -2,7 +2,7 @@
 
 > **角色：** 本文件同时是 **执行计划**（目标 / 架构 / 决议 / 阶段大纲）与 **任务清单**（可勾选 TODO）。  
 > **模组路径：** `D:\Steam\steamapps\common\RimWorld\Mods\Rimpipe`  
-> **状态：** 阶段四 **4.1–4.8 ✅**；**4.9 延后**；**4.10 DirtyTopo 延后**（7.10.b Benchmark/Stress ✅ · `0.4.3`）；**4.11 发布 R1 ✅**（§1.2s · `0.4.0`）；**4.12 Debug 整理 ✅**（§1.2t · `0.4.1`）；**Overlay 性能修复验收通过**（§1.2u / §7.3.f · `0.4.2`）  
+> **状态：** 阶段四 **4.1–4.8 ✅**；**4.9 延后**；**4.10 DirtyTopo 延后**（7.10.b Benchmark/Stress ✅ · `0.4.3`）；**4.11 发布 R1 ✅**（§1.2s · `0.4.0`）；**4.12 Debug 整理 ✅**（§1.2t · `0.4.1`）；**Overlay 性能修复验收通过**（§1.2u / §7.3.f · `0.4.2`）；**批级优化验收通过**（§7.10.8 · `0.4.4`）；**休眠重评估单遍聚合验收通过**（§7.10.9 · `0.4.5`）  
 
 > **依据：** 2026-07 讨论决议 · 官方源码对齐 · 弃用策划文档仅作历史参考  
 > **约定：** 查接口不瞎猜 · 模糊先确认 · 无 Harmony（Bridge-A 不引入；Bridge-H 另议）· 无 `Node` / `Connection` / `PipeLine` · **管道格不储存流体**（仅拓扑；量仅在设备/管件 Container）· **文案风格见 §八 X10**  
@@ -920,7 +920,7 @@ want  = min(maxFlowRate, amountSrc, freeDst)
 | **1** | **4.11 发布准备 R1** | §7.11 | `0.4.0` 冻结 + `RimPipe_API.md`（含原 RELEASE）+ 回归（含化学） | ✅ §1.2s |
 | ~~1~~ | ~~**4.12 Debug 整理**~~ | — | — | ✅ §1.2t |
 
-**下一动作：** 玩家手测 Stress / 计时重建对照 §7.10.3；可选 R2 / Bridge-H（§7.9）；DirtyTopo 仍延后。
+**下一动作：** 手测 B3 已完成（§7.10.8）；批级优化 ✅；可选 R2 / Bridge-H（§7.9）/ 玩法功能；DirtyTopo 维持延后（重建 2.489ms < 门槛）。
 
 ### 6.12 决议：泄漏效果 — E-A（已锁定 · 2026-07-14）
 
@@ -2070,6 +2070,32 @@ B1–B2 **已编码**；B3 为手测流程。**不等于**启动 DirtyTopo 编�
 | 批级 | 若大网常态峰值来自 phase=19 / Busy Acc，应优先 Benchmark Acc·Commit·`ReevaluateAllNetSleepStates`，而非先上 DirtyTopo |
 | 决策 | 仍按 §7.10.3：有 Stopwatch/Stress 数字再开刀；本笔记作证据基线 |
 
+#### 7.10.8 批级优化：Acc/Heat 分配复用 + 按网跳过（2026-08-01 · 验收通过）
+
+> **依据：** §7.10.7 峰因分类「Busy 时 Acc Jacobi 含临时 List/Dict 分配」+ 批级优先建议。  
+> **范围：** 仅 MapComponent 批处理实现；**不改** Flow/Heat 公式、拓扑、存档（schema 仍 1）、DefName。
+
+| 项 | 改动 | 结果 |
+|----|------|------|
+| 分配复用 | AccumulateFlow / AccumulateHeat 的虚拟量 / wants / 求和 / 增量 List·Dict 改为**成员字段复用**（每批 `Clear()`），Busy 批每批堆分配约 58 次 → 0 | ✅ |
+| 按网跳过 | 每批只收一遍 **Busy 网**的 Flow/Heat 边（批内休眠态恒定，等价原逐边检查 netId），12 / 4 轮 Jacobi 只跑小列表；非 Busy 网不再每轮全图扫描 | ✅ |
+| 批级计时 | 新增 `lastAccMs` / `lastCommitMs` / `lastReevalMs`（tick 与 DebugForceOneBatch 记录；Dump 汇总行输出） | ✅ |
+| 验收 | 空图跑 R-框架 / R-物理 / R-热与环境 / R-化学 / R-扩展 = **5/5 满分**；Stress（132 构件 / 505 管 / 157 Mapping / 25 网）：`lastAccMs≈0.33–0.42 · lastCommitMs≈0.06–0.08 · lastReevalMs≈0.19–0.23 · lastTopoMs=2.489`；全文无 Exception / Config error / 失败（Player.log · 2026-08-01） | ✅ 玩家确认 |
+| DirtyTopo 决策 | 整图重建 **2.489ms 稳定 < ~5ms 门槛**（§7.10.3），批级全亚毫秒 → **DirtyTopo 仍不启动** | 维持延后 |
+
+#### 7.10.9 休眠重评估单遍聚合（2026-08-01 · 验收通过）
+
+> **依据：** §7.10.7 峰因「phase=19 休眠重评估按 netId 扫 mappings/members」；实测旧实现 `lastReevalMs≈0.19–0.23ms`（25 网 Stress），且 `GetTemperatureForCell` 每网×每成员重复查温。  
+> **范围：** 仅 MapComponent 休眠重评估实现；**不改**休眠判定规则、Flow/Heat 公式、拓扑、存档（schema 仍 1）。
+
+| 项 | 改动 | 结果 |
+|----|------|------|
+| 算法 | `ReevaluateAllNetSleepStates` 由「每网各扫一遍全图」（O(nets × 全图)）改为**单遍扫图、按 netId 聚合** per-net Busy/Amb 标志后一次定态 | ✅ |
+| 查温 | `GenTemperature.GetTemperatureForCell` 从「每网 × 每成员」改为**每构件一次** | ✅ |
+| 分配 | `reevalBusy` / `reevalAmb` 布尔数组字段复用（仅 netCount 增长时重分配），无每批分配 | ✅ |
+| 早退保留 | 本网已定 Busy 即不再算 want（对齐原逐网早退） | ✅ |
+| 验收 | 空图跑 5 套件 = **5/5 满分**（休眠断言全过）；Stress（135 构件 / 507 管 / 150 Mapping / **30 网**）：`lastReevalMs 0.186–0.227 → 0.027–0.033ms`（≈7×，网更多反而更低）；全文无 Exception / Config error / 失败（Player.log · 2026-08-01） | ✅ 玩家确认 |
+
 ---
 
 ### 7.11 决议：4.11 发布准备 — R1（已锁定 · 2026-07-20）
@@ -2314,8 +2340,10 @@ B1–B2 **已编码**；B3 为手测流程。**不等于**启动 DirtyTopo 编�
 | MapComponentTick 峰值研究笔记 | ✅ 2026-07-20（§7.10.7） |
 | 阶段四 4.12 玩家验收 | ✅ 2026-07-20（§1.2t；末段五套件满分；中段摧毁停漏偶发 6/7 不影响） |
 | 7.10.b Benchmark + Stress Debug | ✅ 2026-07-20（About `0.4.3`；计时 + Stress + 计时重建键；DirtyTopo 仍延后） |
-| **下一动作** | 玩家手测 Stress ms（§7.10.4 B3）对照 §7.10.3；可选 R2 / Bridge-H |
-| Bridge-H 实施 / DirtyTopo 本体 / R2 | ⬜ 延后 |
+| 批级优化（Acc/Heat 分配复用 + 按网跳过 + 批级计时） | ✅ 2026-08-01（§7.10.8 · 5/5 套件满分 · About `0.4.4`） |
+| 休眠重评估单遍聚合（Reevaluate O(nets×全图)→O(全图)） | ✅ 2026-08-01（§7.10.9 · 5/5 套件满分 · lastReevalMs ≈7× 降 · About `0.4.5`） |
+| **下一动作** | 手测 B3 ✅（重建 2.489ms < 门槛）；批级优化 ✅；休眠评估聚合 ✅；可选 R2 / Bridge-H（§7.9）/ 玩法功能 |
+| Bridge-H 实施 / DirtyTopo 本体 / R2 | ⬜ 延后（DirtyTopo：重建 2.489ms < ~5ms 门槛，维持延后） |
 
 ---
 

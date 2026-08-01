@@ -17,6 +17,8 @@ public class CompPipePump : ThingComp, IPipeInternalMappingContributor
 	private Mapping? internalMapping;
 	private CompPowerTrader? powerComp;
 	private readonly List<ExternalMappingSnapshot> externalSnapshots = new List<ExternalMappingSnapshot>();
+	/// <summary>与泵两岸直接相邻的外部边（拓扑重建时收集一次）；开关/断电时只扫这份，不再 O(全图)。</summary>
+	private readonly List<Mapping> adjacentExternalMappings = new List<Mapping>();
 
 	/// <summary>只给 Debug 场景用：假装有电，方便验收。不写进存档。</summary>
 	public bool debugForcePowered;
@@ -91,19 +93,11 @@ public class CompPipePump : ThingComp, IPipeInternalMappingContributor
 		internalMapping = null;
 		powerComp ??= parent.TryGetComp<CompPowerTrader>();
 		CompPipeNetworkMember? member = parent.GetComp<CompPipeNetworkMember>();
-		if (member == null || !parent.Spawned)
+		if (!MapComponent_PipeNetwork.TryResolveContainers(member, Props.containerIndexA, Props.containerIndexB, "泵", out Container? a, out Container? b)
+			|| a == null || b == null)
 		{
 			return;
 		}
-		int ia = Props.containerIndexA;
-		int ib = Props.containerIndexB;
-		if (ia < 0 || ib < 0 || ia >= member.Containers.Count || ib >= member.Containers.Count)
-		{
-			Log.Error($"[RimPipe] 泵 {parent.LabelCap} 容器索引越界 A={ia} B={ib} count={member.Containers.Count}");
-			return;
-		}
-		Container a = member.Containers[ia];
-		Container b = member.Containers[ib];
 		internalMapping = net.AddInternalMapping(
 			a,
 			b,
@@ -112,6 +106,21 @@ public class CompPipePump : ThingComp, IPipeInternalMappingContributor
 			linkedPairs,
 			FlowDriveMode.Forced,
 			Props.forcedFromA);
+		// 外部边在此前已全部建好：一次收集与泵两岸相接的边，供后续开关泵复用
+		adjacentExternalMappings.Clear();
+		IReadOnlyList<Mapping> all = net.Mappings;
+		for (int i = 0; i < all.Count; i++)
+		{
+			Mapping m = all[i];
+			if (m == internalMapping || m.IsIncomplete || m.containerA == null || m.containerB == null)
+			{
+				continue;
+			}
+			if (Touches(m, a) || Touches(m, b))
+			{
+				adjacentExternalMappings.Add(m);
+			}
+		}
 		ApplyDriveToConnectedMappings(net);
 	}
 
@@ -156,10 +165,10 @@ public class CompPipePump : ThingComp, IPipeInternalMappingContributor
 			(inlet, outlet) = (outlet, inlet);
 		}
 
-		IReadOnlyList<Mapping> all = net.Mappings;
-		for (int i = 0; i < all.Count; i++)
+		// 只扫拓扑重建时收集的邻接边，避免每次开/关泵遍历全图
+		for (int i = 0; i < adjacentExternalMappings.Count; i++)
 		{
-			Mapping m = all[i];
+			Mapping m = adjacentExternalMappings[i];
 			if (m == internalMapping || m.IsIncomplete || m.containerA == null || m.containerB == null)
 			{
 				continue;
