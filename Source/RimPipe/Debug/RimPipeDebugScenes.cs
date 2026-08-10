@@ -155,6 +155,55 @@ internal static class RimPipeDebugScenes
 		Messages.Message("[RimPipe] 泵逆均分场景已生成（左20/右80，Forced 左→右）。", MessageTypeDefOf.TaskCompletion, historical: false);
 	}
 
+	/// <summary>
+	/// 泵局部重建回归场景：左罐—管—泵—管—右罐（5 格横排），左 20% / 右 80%，泵开+强电。
+	/// 用于验证「局部拓扑重建后泵邻接外部边仍被强制」（DirtyTopo 回归）。
+	/// </summary>
+	internal static void SpawnPumpPipeLocalScene(Map map, IntVec3 origin)
+	{
+		IntVec3 tankL = origin + new IntVec3(-2, 0, 0);
+		IntVec3 pipeL = origin + new IntVec3(-1, 0, 0);
+		IntVec3 pumpPos = origin;
+		IntVec3 pipeR = origin + new IntVec3(1, 0, 0);
+		IntVec3 tankR = origin + new IntVec3(2, 0, 0);
+
+		RimPipeDebugUtil.DestroyAt(map, tankL);
+		RimPipeDebugUtil.DestroyAt(map, pipeL);
+		RimPipeDebugUtil.DestroyAt(map, pumpPos);
+		RimPipeDebugUtil.DestroyAt(map, pipeR);
+		RimPipeDebugUtil.DestroyAt(map, tankR);
+
+		Building pump = (Building)GenSpawn.Spawn(RimPipeDefOf.RimPipe_Pump, pumpPos, map, Rot4.North);
+		GenSpawn.Spawn(RimPipeDefOf.RimPipe_Pipe, pipeL, map, Rot4.North);
+		GenSpawn.Spawn(RimPipeDefOf.RimPipe_Pipe, pipeR, map, Rot4.North);
+		Building left = (Building)GenSpawn.Spawn(RimPipeDefOf.RimPipe_StorageTank, tankL, map, Rot4.North);
+		Building right = (Building)GenSpawn.Spawn(RimPipeDefOf.RimPipe_StorageTank, tankR, map, Rot4.North);
+
+		CompPipePump? p = pump.GetComp<CompPipePump>();
+		if (p != null)
+		{
+			p.debugForcePowered = true;
+			p.IsOpen = true;
+		}
+
+		MapComponent_PipeNetwork net = map.GetComponent<MapComponent_PipeNetwork>();
+		CompPipeNetworkMember cl = left.GetComp<CompPipeNetworkMember>();
+		CompPipeNetworkMember cr = right.GetComp<CompPipeNetworkMember>();
+		FluidDef fluid = RimPipeDefOf.RimPipe_Fluid_TestWater;
+		cl.Containers[0].fluid = fluid;
+		cr.Containers[0].fluid = fluid;
+		net.DebugFillContainer(cl.Containers[0], 0.2f);
+		net.DebugFillContainer(cr.Containers[0], 0.8f);
+
+		net.RequestFullRebuild();
+		net.DebugProcessTopology();
+		p?.ApplyRateToInternalMapping();
+		Log.Message(
+			$"[RimPipe] 泵局部重建场景 @ {origin} 开={p?.IsOpen} 电={p?.HasPower} rate={p?.EffectiveMaxFlowRate} " +
+			$"左={cl.Containers[0].amount} 右={cr.Containers[0].amount}");
+		Messages.Message("[RimPipe] 泵局部重建回归场景已生成（左20/右80，管—泵—管）。", MessageTypeDefOf.TaskCompletion, historical: false);
+	}
+
 	internal static void SpawnPressureUnequalScene(Map map, IntVec3 origin)
 	{
 		IntVec3 tankL = origin + IntVec3.West;
@@ -635,5 +684,147 @@ internal static class RimPipeDebugScenes
 			$"重建={net.LastTopologyRebuildMs:F3}ms skippedRows={skipped} @ {origin}";
 		Log.Message(msg);
 		Messages.Message(msg, MessageTypeDefOf.TaskCompletion, historical: false);
+	}
+
+	/// <summary>
+	/// 双通道十字场景：中央管道格 A={E,W}、B={N,S}（十字交叉互不相连）。
+	/// 东西罐经 A 通道连通（端口 channel=0），南北罐经 B 通道连通（端口 channel=1）。
+	/// </summary>
+	internal static void SpawnChannelCrossScene(Map map, IntVec3 origin)
+	{
+		IntVec3 center = origin;
+		IntVec3 eastPos = origin + IntVec3.East;
+		IntVec3 westPos = origin + IntVec3.West;
+		IntVec3 northPos = origin + IntVec3.North;
+		IntVec3 southPos = origin + IntVec3.South;
+
+		RimPipeDebugUtil.DestroyAt(map, center);
+		RimPipeDebugUtil.DestroyAt(map, eastPos);
+		RimPipeDebugUtil.DestroyAt(map, westPos);
+		RimPipeDebugUtil.DestroyAt(map, northPos);
+		RimPipeDebugUtil.DestroyAt(map, southPos);
+
+		Building pipe = (Building)GenSpawn.Spawn(RimPipeDefOf.RimPipe_Pipe, center, map, Rot4.North);
+		Building east = (Building)GenSpawn.Spawn(RimPipeDefOf.RimPipe_StorageTank, eastPos, map, Rot4.North);
+		Building west = (Building)GenSpawn.Spawn(RimPipeDefOf.RimPipe_StorageTank, westPos, map, Rot4.North);
+		Building north = (Building)GenSpawn.Spawn(RimPipeDefOf.RimPipe_StorageTank, northPos, map, Rot4.North);
+		Building south = (Building)GenSpawn.Spawn(RimPipeDefOf.RimPipe_StorageTank, southPos, map, Rot4.North);
+
+		// 中央管道格：A={E,W}，B={N,S}
+		CompPipeCell? cell = pipe.GetComp<CompPipeCell>();
+		if (cell != null)
+		{
+			cell.SetDir(Rot4.North, CompPipeCell.GroupA, false);
+			cell.SetDir(Rot4.South, CompPipeCell.GroupA, false);
+			cell.SetDir(Rot4.North, CompPipeCell.GroupB, true);
+			cell.SetDir(Rot4.South, CompPipeCell.GroupB, true);
+		}
+
+		// 南北罐朝中央的端口接到 B 组
+		CompPipeNetworkMember cNorth = north.GetComp<CompPipeNetworkMember>();
+		CompPipeNetworkMember cSouth = south.GetComp<CompPipeNetworkMember>();
+		cNorth.FindPortFacingWorld(Rot4.South)!.channel = 1;
+		cSouth.FindPortFacingWorld(Rot4.North)!.channel = 1;
+
+		MapComponent_PipeNetwork net = map.GetComponent<MapComponent_PipeNetwork>();
+		FluidDef fluid = RimPipeDefOf.RimPipe_Fluid_TestWater;
+		CompPipeNetworkMember cEast = east.GetComp<CompPipeNetworkMember>();
+		CompPipeNetworkMember cWest = west.GetComp<CompPipeNetworkMember>();
+		cEast.Containers[0].fluid = fluid;
+		cWest.Containers[0].fluid = fluid;
+		cNorth.Containers[0].fluid = fluid;
+		cSouth.Containers[0].fluid = fluid;
+		net.DebugFillContainer(cEast.Containers[0], 1f);
+		net.DebugFillContainer(cWest.Containers[0], 0f);
+		net.DebugFillContainer(cNorth.Containers[0], 0.6f);
+		net.DebugFillContainer(cSouth.Containers[0], 0.6f);
+
+		net.RequestFullRebuild();
+		net.DebugProcessTopology();
+		Log.Message(
+			$"[RimPipe] 双通道十字场景 @ {origin} 东={cEast.Containers[0].amount:0.##} 西={cWest.Containers[0].amount:0.##} " +
+			$"北={cNorth.Containers[0].amount:0.##} 南={cSouth.Containers[0].amount:0.##} " +
+			$"管格A={cell?.groupAMask} B={cell?.groupBMask}");
+		Messages.Message("[RimPipe] 双通道十字验收场景已生成（东西=A 线，南北=B 线，互不相连）。", MessageTypeDefOf.TaskCompletion, historical: false);
+	}
+
+	/// <summary>粘度对比场景：一套水（v=1）、一套稠液（v=2），各为 罐—管—罐 直列，左满右空。</summary>
+	internal static void SpawnViscosityScene(Map map, IntVec3 origin)
+	{
+		IntVec3 wL = origin;
+		IntVec3 wPipe = origin + IntVec3.East;
+		IntVec3 wR = origin + new IntVec3(2, 0, 0);
+		IntVec3 tL = origin + new IntVec3(0, 0, 2);
+		IntVec3 tPipe = tL + IntVec3.East;
+		IntVec3 tR = tL + new IntVec3(2, 0, 0);
+
+		RimPipeDebugUtil.DestroyAt(map, wL);
+		RimPipeDebugUtil.DestroyAt(map, wPipe);
+		RimPipeDebugUtil.DestroyAt(map, wR);
+		RimPipeDebugUtil.DestroyAt(map, tL);
+		RimPipeDebugUtil.DestroyAt(map, tPipe);
+		RimPipeDebugUtil.DestroyAt(map, tR);
+
+		Building wTankL = (Building)GenSpawn.Spawn(RimPipeDefOf.RimPipe_StorageTank, wL, map, Rot4.North);
+		GenSpawn.Spawn(RimPipeDefOf.RimPipe_Pipe, wPipe, map, Rot4.North);
+		Building wTankR = (Building)GenSpawn.Spawn(RimPipeDefOf.RimPipe_StorageTank, wR, map, Rot4.North);
+		Building tTankL = (Building)GenSpawn.Spawn(RimPipeDefOf.RimPipe_StorageTank, tL, map, Rot4.North);
+		GenSpawn.Spawn(RimPipeDefOf.RimPipe_Pipe, tPipe, map, Rot4.North);
+		Building tTankR = (Building)GenSpawn.Spawn(RimPipeDefOf.RimPipe_StorageTank, tR, map, Rot4.North);
+
+		MapComponent_PipeNetwork net = map.GetComponent<MapComponent_PipeNetwork>();
+		CompPipeNetworkMember cWL = wTankL.GetComp<CompPipeNetworkMember>();
+		CompPipeNetworkMember cWR = wTankR.GetComp<CompPipeNetworkMember>();
+		CompPipeNetworkMember cTL = tTankL.GetComp<CompPipeNetworkMember>();
+		CompPipeNetworkMember cTR = tTankR.GetComp<CompPipeNetworkMember>();
+		// 基准线用 TestFuel（v=1 c=1，行为同水），避免与其他场景的水罐混淆
+		FluidDef baseline = RimPipeDefOf.RimPipe_Fluid_TestFuel;
+		FluidDef thick = RimPipeDefOf.RimPipe_Fluid_TestThick;
+		cWL.Containers[0].fluid = baseline;
+		cWR.Containers[0].fluid = baseline;
+		cTL.Containers[0].fluid = thick;
+		cTR.Containers[0].fluid = thick;
+		net.DebugFillContainer(cWL.Containers[0], 1f);
+		net.DebugFillContainer(cWR.Containers[0], 0f);
+		net.DebugFillContainer(cTL.Containers[0], 1f);
+		net.DebugFillContainer(cTR.Containers[0], 0f);
+
+		net.RequestFullRebuild();
+		net.DebugProcessTopology();
+		Log.Message(
+			$"[RimPipe] 粘度场景 @ {origin} 基准={baseline.defName}(v={baseline.viscosity}) 稠液={thick.defName}(v={thick.viscosity}) " +
+			$"基准右={cWR.Containers[0].amount:0.##} 稠右={cTR.Containers[0].amount:0.##}");
+		Messages.Message("[RimPipe] 粘度验收场景已生成（基准 v=1 vs 稠液 v=2，罐—管—罐）。", MessageTypeDefOf.TaskCompletion, historical: false);
+	}
+
+	/// <summary>比热对比场景：换热器内部两腔，西腔水（c=1）、东腔高比热液（c=2），同量同初温差。</summary>
+	internal static void SpawnSpecificHeatScene(Map map, IntVec3 origin)
+	{
+		RimPipeDebugUtil.DestroyAt(map, origin);
+
+		Building hx = (Building)GenSpawn.Spawn(RimPipeDefOf.RimPipe_HeatExchanger, origin, map, Rot4.North);
+		MapComponent_PipeNetwork net = map.GetComponent<MapComponent_PipeNetwork>();
+		CompPipeNetworkMember mem = hx.GetComp<CompPipeNetworkMember>();
+		Container hot = mem.Containers[0];
+		Container cold = mem.Containers[1];
+		hot.fluid = RimPipeDefOf.RimPipe_Fluid_TestWater;
+		cold.fluid = RimPipeDefOf.RimPipe_Fluid_TestHeatSink;
+		net.DebugFillContainer(hot, 1f);
+		net.DebugFillContainer(cold, 1f);
+		net.DebugSetTemperature(hot, 80f);
+		net.DebugSetTemperature(cold, 20f);
+
+		CompPipeHeatExchanger? hxComp = hx.GetComp<CompPipeHeatExchanger>();
+		if (hxComp != null)
+		{
+			hxComp.IsOpen = true;
+		}
+
+		net.RequestFullRebuild();
+		net.DebugProcessTopology();
+		Log.Message(
+			$"[RimPipe] 比热场景 @ {origin} 水腔(c={hot.fluid.specificHeat}) T={hot.temperature} " +
+			$"高比热腔(c={cold.fluid.specificHeat}) T={cold.temperature} 开={hxComp?.IsOpen}");
+		Messages.Message("[RimPipe] 比热验收场景已生成（换热器两腔 c=1 vs c=2）。", MessageTypeDefOf.TaskCompletion, historical: false);
 	}
 }

@@ -51,6 +51,13 @@
   <RimPipe_Gizmo_PipeBreached>管道：破损</RimPipe_Gizmo_PipeBreached>
   <RimPipe_Gizmo_PipeIntact>管道：完好</RimPipe_Gizmo_PipeIntact>
   <RimPipe_Gizmo_PipeBreachDesc>切换破损。破损时连通的罐会漏液；拆掉管道则断开连接并停止泄漏（默认不把罐倒空）。</RimPipe_Gizmo_PipeBreachDesc>
+  <RimPipe_Gizmo_GroupA>通道组 A</RimPipe_Gizmo_GroupA>
+  <RimPipe_Gizmo_GroupB>通道组 B</RimPipe_Gizmo_GroupB>
+  <RimPipe_Gizmo_GroupDesc>当前编辑的通道组 {0}。同组的方向在格内互相连通；不同组互不相连。下面的方向按钮作用在这个组上。</RimPipe_Gizmo_GroupDesc>
+  <RimPipe_Gizmo_DirLabel>{0}</RimPipe_Gizmo_DirLabel>
+  <RimPipe_Gizmo_DirDesc>方向 {0} 是否属于通道组 {1}。开着时本格向那边出口连通（邻居那边也要开着才能接上）。</RimPipe_Gizmo_DirDesc>
+  <RimPipe_Inspect_DirNone>（空）</RimPipe_Inspect_DirNone>
+  <RimPipe_Inspect_PipeDir>{0}：{1}    {2}：{3}</RimPipe_Inspect_PipeDir>
   <RimPipe_Gizmo_TankBreached>储罐：破损</RimPipe_Gizmo_TankBreached>
   <RimPipe_Gizmo_TankIntact>储罐：完好</RimPipe_Gizmo_TankIntact>
   <RimPipe_Gizmo_TankBreachDesc>切换破损。破损时本罐自己按批漏液，不依赖旁边有没有管道。</RimPipe_Gizmo_TankBreachDesc>

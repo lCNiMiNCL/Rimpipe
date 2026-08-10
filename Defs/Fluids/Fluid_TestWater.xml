@@ -3,9 +3,11 @@
   <RimPipe.FluidDef>
     <defName>RimPipe_Fluid_TestWater</defName>
     <label>测试水</label>
-    <description>测试用液体。泄漏时只扣量，不产生脏污，也不升温。</description>
+    <description>测试用液体。泄漏时只扣量，不产生脏污，也不升温。粘度 1 / 比热 1 作为基准流体。</description>
     <leakEffects>
       <li>None</li>
     </leakEffects>
+    <viscosity>1</viscosity>
+    <specificHeat>1</specificHeat>
   </RimPipe.FluidDef>
 </Defs>

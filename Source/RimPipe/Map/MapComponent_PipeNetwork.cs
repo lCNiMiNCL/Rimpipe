@@ -618,6 +618,20 @@ public class MapComponent_PipeNetwork : MapComponent
 	}
 
 	/// <summary>
+	/// 管道格方向分组刚切换过：必须走拓扑重建（方向影响连通性），
+	/// 复用 PipeChanged 局部重建路径（自带 netId 增量与缓存失效）。
+	/// </summary>
+	public void NotifyPipeConnectionChanged(CompPipeCell comp)
+	{
+		if (comp?.parent == null)
+		{
+			return;
+		}
+		batchCachesDirty = true;
+		Enqueue(DelayedActionType.PipeChanged, comp.parent.Position);
+	}
+
+	/// <summary>
 	/// 管道或储罐的 breached 刚切换过：只刷新相关 Mapping.leakOpen（不必整网重建），并唤醒受影响的网。
 	/// </summary>
 	public void NotifyBreachChanged()
@@ -863,28 +877,25 @@ public class MapComponent_PipeNetwork : MapComponent
 
 		// —— 2)+4) 受影响管道分量洪水收集（规格步骤 4 的主体，先于阈值粗算） ——
 		HashSet<IntVec3> affectedPipeCells = new HashSet<IntVec3>();
-		List<HashSet<IntVec3>> components = new List<HashSet<IntVec3>>();
-		HashSet<IntVec3> visited = new HashSet<IntVec3>();
-		// 放管（格还在）：从格洪水；拆管（格已移除）：从 4 邻各自洪水（分裂）
+		List<HashSet<(IntVec3 cell, int channel)>> components = new List<HashSet<(IntVec3 cell, int channel)>>();
+		HashSet<(IntVec3 cell, int channel)> visited = new HashSet<(IntVec3 cell, int channel)>();
+		// 放管（格还在）：从格各通道洪水；拆管（格已移除）：从 4 邻各自洪水（分裂）
 		foreach (IntVec3 c in pipeDirtyCells)
 		{
-			if (cellToPipe.ContainsKey(c))
+			if (cellToPipe.TryGetValue(c, out CompPipeCell pipe))
 			{
-				if (!visited.Contains(c))
-				{
-					FloodPipeComponent(c, visited, components, affectedPipeCells);
-				}
+				FloodComponentFromAllChannels(c, pipe, visited, components, affectedPipeCells);
 			}
 			else
 			{
 				foreach (IntVec3 dir in GenAdj.CardinalDirections)
 				{
 					IntVec3 n = c + dir;
-					if (!n.InBounds(map) || !cellToPipe.ContainsKey(n) || visited.Contains(n))
+					if (!n.InBounds(map) || !cellToPipe.TryGetValue(n, out CompPipeCell nPipe))
 					{
 						continue;
 					}
-					FloodPipeComponent(n, visited, components, affectedPipeCells);
+					FloodComponentFromAllChannels(n, nPipe, visited, components, affectedPipeCells);
 				}
 			}
 		}
@@ -899,9 +910,9 @@ public class MapComponent_PipeNetwork : MapComponent
 			for (int j = 0; j < cells.Count; j++)
 			{
 				IntVec3 cell = cells[j];
-				if (cell.IsValid && cellToPipe.ContainsKey(cell) && !visited.Contains(cell))
+				if (cell.IsValid && cellToPipe.TryGetValue(cell, out CompPipeCell memPipe))
 				{
-					FloodPipeComponent(cell, visited, components, affectedPipeCells);
+					FloodComponentFromAllChannels(cell, memPipe, visited, components, affectedPipeCells);
 				}
 			}
 		}
@@ -1092,10 +1103,10 @@ public class MapComponent_PipeNetwork : MapComponent
 		}
 
 		// —— 9) 环路重连检查：对「重建后仍未恢复」的被删管道 pair 找替代连通分量 ——
-		List<HashSet<IntVec3>> reconnectComponents = new List<HashSet<IntVec3>>();
-		// 分量去重 key：同一分量可能被多个 pair / 附件格洪水到，用分量最小格作规范 key
+		List<HashSet<(IntVec3 cell, int channel)>> reconnectComponents = new List<HashSet<(IntVec3 cell, int channel)>>();
+		// 分量去重 key：同一分量可能被多个 pair / 附件格洪水到，用分量最小节点作规范 key
 		//（List.Contains 对 HashSet 是引用相等，不能用于去重）
-		HashSet<IntVec3> reconnectSeen = new HashSet<IntVec3>();
+		HashSet<(IntVec3 cell, int channel)> reconnectSeen = new HashSet<(IntVec3 cell, int channel)>();
 		if (deletedPipePairs.Count > 0)
 		{
 			// 恢复判定：当前 mappings 里存在同 key（Flow）的 pair
@@ -1130,9 +1141,9 @@ public class MapComponent_PipeNetwork : MapComponent
 				{
 					continue;
 				}
-				// 收集两端容器的管道附件外格
-				List<IntVec3> attachA = new List<IntVec3>();
-				List<IntVec3> attachB = new List<IntVec3>();
+				// 收集两端容器的管道附件接入节点（外格 + 通道）
+				List<(IntVec3 cell, int channel)> attachA = new List<(IntVec3, int)>();
+				List<(IntVec3 cell, int channel)> attachB = new List<(IntVec3, int)>();
 				for (int i = 0; i < members.Count; i++)
 				{
 					CompPipeNetworkMember m = members[i];
@@ -1144,17 +1155,22 @@ public class MapComponent_PipeNetwork : MapComponent
 					{
 						Port port = m.Ports[p];
 						IntVec3 outer = port.OuterCell;
-						if (!cellToPipe.ContainsKey(outer))
+						if (!cellToPipe.TryGetValue(outer, out CompPipeCell pipe))
+						{
+							continue;
+						}
+						int g = pipe.DirGroup(port.WorldRot.Opposite);
+						if (g == CompPipeCell.GroupNone || g != PortChannelGroup(port))
 						{
 							continue;
 						}
 						if (ReferenceEquals(port.Container, dp.a))
 						{
-							attachA.Add(outer);
+							attachA.Add((outer, g));
 						}
 						else if (ReferenceEquals(port.Container, dp.b))
 						{
-							attachB.Add(outer);
+							attachB.Add((outer, g));
 						}
 					}
 				}
@@ -1163,32 +1179,34 @@ public class MapComponent_PipeNetwork : MapComponent
 					continue;
 				}
 				bool found = false;
-				foreach (IntVec3 ca in attachA)
+				foreach ((IntVec3 ca, int chA) in attachA)
 				{
 					if (affectedPipeCells.Contains(ca))
 					{
 						continue; // 已重建过的小残段，无对端附件
 					}
-					HashSet<IntVec3> compCells = FloodComponentSet(ca);
+					HashSet<(IntVec3, int)> compCells = FloodComponentSet((ca, chA));
 					if (compCells.Count > pipeCells.Count * DirtyTopoThreshold)
 					{
 						RebuildAllMappings();
 						return;
 					}
-					foreach (IntVec3 cb in attachB)
+					foreach ((IntVec3 cb, int chB) in attachB)
 					{
-						if (compCells.Contains(cb))
+						if (compCells.Contains((cb, chB)))
 						{
-							// 同一分量可能被多个 pair / 附件格洪水到，取分量最小格作规范 key 去重
-							IntVec3 minCell = IntVec3.Invalid;
-							foreach (IntVec3 cc in compCells)
+							// 同一分量可能被多个 pair / 附件格洪水到，取分量最小节点作规范 key 去重
+							(IntVec3, int) minNode = (IntVec3.Invalid, int.MaxValue);
+							foreach ((IntVec3 cc, int cch) in compCells)
 							{
-								if (!minCell.IsValid || cc.x < minCell.x || (cc.x == minCell.x && cc.z < minCell.z))
+								if (!minNode.Item1.IsValid || cc.x < minNode.Item1.x
+									|| (cc.x == minNode.Item1.x && (cc.z < minNode.Item1.z
+										|| (cc.z == minNode.Item1.z && cch < minNode.Item2))))
 								{
-									minCell = cc;
+									minNode = (cc, cch);
 								}
 							}
-							if (reconnectSeen.Add(minCell))
+							if (reconnectSeen.Add(minNode))
 							{
 								reconnectComponents.Add(compCells);
 							}
@@ -1207,8 +1225,8 @@ public class MapComponent_PipeNetwork : MapComponent
 			{
 				for (int i = 0; i < reconnectComponents.Count; i++)
 				{
-					HashSet<IntVec3> comp = reconnectComponents[i];
-					foreach (IntVec3 cc in comp)
+					HashSet<(IntVec3 cell, int channel)> comp = reconnectComponents[i];
+					foreach ((IntVec3 cc, int _) in comp)
 					{
 						affectedPipeCells.Add(cc);
 					}
@@ -1217,6 +1235,29 @@ public class MapComponent_PipeNetwork : MapComponent
 				{
 					BuildPipeComponent(reconnectComponents[i], linkedPairs);
 					CollectAttachmentContainers(reconnectComponents[i], affectedContainers);
+				}
+			}
+		}
+
+		// —— 9d) 泵邻接外部边刷新：局部重建后泵旁的管道边可能被删了又新建（退回 Equalize），
+		// 需重收邻接缓存并重新施加 Forced（全图重建由 ContributeInternalMapping 覆盖，此处只补局部路径）。
+		// 必须放在环路重连之后，确保所有新建外部边都已入列；对脏泵重复调用幂等。
+		foreach (CompPipeNetworkMember mem in affectedMembers)
+		{
+			if (mem?.parent == null || !mem.parent.Spawned)
+			{
+				continue;
+			}
+			List<ThingComp> comps = mem.parent.AllComps;
+			if (comps == null)
+			{
+				continue;
+			}
+			for (int c = 0; c < comps.Count; c++)
+			{
+				if (comps[c] is CompPipePump pump)
+				{
+					pump.RefreshAdjacentMappingsAfterLocalRebuild(this);
 				}
 			}
 		}
@@ -1292,66 +1333,120 @@ public class MapComponent_PipeNetwork : MapComponent
 		}
 	}
 
-	/// <summary>从 seed 洪水收集一个管道连通分量（4 邻，cellToPipe 可达），并入 visited/components/affected。</summary>
+	/// <summary>
+	/// 从 (seed, channel) 节点洪水收集一个管道连通分量（节点 = 格子×通道）。
+	/// 格内只沿本通道方向走（跨组隔离）；邻居只要对向出口开就连通（A 可连 B）。
+	/// </summary>
 	private void FloodPipeComponent(
-		IntVec3 seed,
-		HashSet<IntVec3> visited,
-		List<HashSet<IntVec3>> components,
+		(IntVec3 cell, int channel) seed,
+		HashSet<(IntVec3 cell, int channel)> visited,
+		List<HashSet<(IntVec3 cell, int channel)>> components,
 		HashSet<IntVec3> affectedPipeCells)
 	{
-		HashSet<IntVec3> comp = new HashSet<IntVec3>();
-		Queue<IntVec3> flood = new Queue<IntVec3>();
-		flood.Enqueue(seed);
+		HashSet<(IntVec3, int)> comp = new HashSet<(IntVec3, int)>();
+		Queue<(IntVec3 cell, int channel)> flood = new Queue<(IntVec3, int)>();
 		visited.Add(seed);
 		comp.Add(seed);
+		flood.Enqueue(seed);
 		while (flood.Count > 0)
 		{
-			IntVec3 c = flood.Dequeue();
-			foreach (IntVec3 dir in GenAdj.CardinalDirections)
+			(IntVec3 c, int ch) = flood.Dequeue();
+			if (!cellToPipe.TryGetValue(c, out CompPipeCell pipe))
 			{
-				IntVec3 n = c + dir;
-				if (!n.InBounds(map) || visited.Contains(n) || !cellToPipe.ContainsKey(n))
+				continue;
+			}
+			for (int i = 0; i < 4; i++)
+			{
+				// 格内只沿本通道的方向走（跨组隔离）
+				if (pipe.DirGroup(new Rot4(i)) != ch)
 				{
 					continue;
 				}
-				visited.Add(n);
-				flood.Enqueue(n);
-				comp.Add(n);
+				IntVec3 n = c + GenAdj.CardinalDirections[i];
+				if (!n.InBounds(map) || !cellToPipe.TryGetValue(n, out CompPipeCell nPipe))
+				{
+					continue;
+				}
+				int nCh = nPipe.DirGroup(new Rot4(i).Opposite);
+				if (nCh == CompPipeCell.GroupNone)
+				{
+					continue;
+				}
+				(IntVec3, int) node = (n, nCh);
+				if (visited.Add(node))
+				{
+					comp.Add(node);
+					flood.Enqueue(node);
+				}
 			}
 		}
 		components.Add(comp);
-		foreach (IntVec3 cc in comp)
+		foreach ((IntVec3 cc, int _) in comp)
 		{
 			affectedPipeCells.Add(cc);
 		}
 	}
 
-	/// <summary>从 seed 洪水收集一个连通分量（不改 visited；供环路重连检查用）。</summary>
-	private HashSet<IntVec3> FloodComponentSet(IntVec3 seed)
+	/// <summary>从格子所有打开的通道分别洪水（A、B 各一个可能的分量种子）。</summary>
+	private void FloodComponentFromAllChannels(
+		IntVec3 cell,
+		CompPipeCell pipe,
+		HashSet<(IntVec3 cell, int channel)> visited,
+		List<HashSet<(IntVec3 cell, int channel)>> components,
+		HashSet<IntVec3> affectedPipeCells)
 	{
-		HashSet<IntVec3> comp = new HashSet<IntVec3>();
-		Queue<IntVec3> flood = new Queue<IntVec3>();
-		flood.Enqueue(seed);
+		if (pipe.groupAMask != 0 && !visited.Contains((cell, CompPipeCell.GroupA)))
+		{
+			FloodPipeComponent((cell, CompPipeCell.GroupA), visited, components, affectedPipeCells);
+		}
+		if (pipe.groupBMask != 0 && !visited.Contains((cell, CompPipeCell.GroupB)))
+		{
+			FloodPipeComponent((cell, CompPipeCell.GroupB), visited, components, affectedPipeCells);
+		}
+	}
+
+	/// <summary>从 (seed, channel) 洪水收集一个连通分量（不改 visited；供环路重连检查用）。</summary>
+	private HashSet<(IntVec3 cell, int channel)> FloodComponentSet((IntVec3 cell, int channel) seed)
+	{
+		HashSet<(IntVec3, int)> comp = new HashSet<(IntVec3, int)>();
+		Queue<(IntVec3, int)> flood = new Queue<(IntVec3, int)>();
 		comp.Add(seed);
+		flood.Enqueue(seed);
 		while (flood.Count > 0)
 		{
-			IntVec3 c = flood.Dequeue();
-			foreach (IntVec3 dir in GenAdj.CardinalDirections)
+			(IntVec3 c, int ch) = flood.Dequeue();
+			if (!cellToPipe.TryGetValue(c, out CompPipeCell pipe))
 			{
-				IntVec3 n = c + dir;
-				if (!n.InBounds(map) || comp.Contains(n) || !cellToPipe.ContainsKey(n))
+				continue;
+			}
+			for (int i = 0; i < 4; i++)
+			{
+				if (pipe.DirGroup(new Rot4(i)) != ch)
 				{
 					continue;
 				}
-				comp.Add(n);
-				flood.Enqueue(n);
+				IntVec3 n = c + GenAdj.CardinalDirections[i];
+				if (!n.InBounds(map) || !cellToPipe.TryGetValue(n, out CompPipeCell nPipe))
+				{
+					continue;
+				}
+				int nCh = nPipe.DirGroup(new Rot4(i).Opposite);
+				if (nCh == CompPipeCell.GroupNone)
+				{
+					continue;
+				}
+				(IntVec3, int) node = (n, nCh);
+				if (comp.Add(node))
+				{
+					flood.Enqueue(node);
+				}
 			}
 		}
 		return comp;
 	}
 
-	/// <summary>把端口外格落在分量内的构件收进集合（分量附件构件）。</summary>
-	private void CollectAttachedMembers(HashSet<IntVec3> componentCells, HashSet<CompPipeNetworkMember> into)
+	/// <summary>把端口接入节点落在分量内的构件收进集合（分量附件构件）。</summary>
+	private void CollectAttachedMembers(HashSet<(IntVec3 cell, int channel)> componentCells, HashSet<CompPipeNetworkMember> into)
 	{
 		for (int i = 0; i < members.Count; i++)
 		{
@@ -1362,7 +1457,7 @@ public class MapComponent_PipeNetwork : MapComponent
 			}
 			for (int p = 0; p < m.Ports.Count; p++)
 			{
-				if (componentCells.Contains(m.Ports[p].OuterCell))
+				if (PortAttachedToComponent(m.Ports[p], componentCells))
 				{
 					into.Add(m);
 					break;
@@ -1371,8 +1466,8 @@ public class MapComponent_PipeNetwork : MapComponent
 		}
 	}
 
-	/// <summary>把端口外格落在分量内的容器收进集合（分量附件容器，供 netId 种子）。</summary>
-	private void CollectAttachmentContainers(HashSet<IntVec3> componentCells, HashSet<Container> into)
+	/// <summary>把端口接入节点落在分量内的容器收进集合（分量附件容器，供 netId 种子）。</summary>
+	private void CollectAttachmentContainers(HashSet<(IntVec3 cell, int channel)> componentCells, HashSet<Container> into)
 	{
 		for (int i = 0; i < members.Count; i++)
 		{
@@ -1384,7 +1479,7 @@ public class MapComponent_PipeNetwork : MapComponent
 			for (int p = 0; p < m.Ports.Count; p++)
 			{
 				Port port = m.Ports[p];
-				if (!componentCells.Contains(port.OuterCell))
+				if (!PortAttachedToComponent(port, componentCells))
 				{
 					continue;
 				}
@@ -2314,53 +2409,62 @@ public class MapComponent_PipeNetwork : MapComponent
 		public Port port;
 		public Container container;
 		public IntVec3 outerCell;
+		/// <summary>接入通道（CompPipeCell.GroupA/GroupB）。</summary>
+		public int channel;
+	}
+
+	/// <summary>端口接入的组：channel 0→A，1→B。</summary>
+	private static int PortChannelGroup(Port port)
+	{
+		return port != null && port.channel == 1 ? CompPipeCell.GroupB : CompPipeCell.GroupA;
+	}
+
+	/// <summary>
+	/// 端口是否接入该分量：外格是管道格、管道格朝端口方向出口属端口组、且接入节点在分量中。
+	/// </summary>
+	private bool PortAttachedToComponent(Port port, HashSet<(IntVec3 cell, int channel)> componentCells)
+	{
+		if (port?.owner?.parent == null)
+		{
+			return false;
+		}
+		IntVec3 outer = port.OuterCell;
+		if (!cellToPipe.TryGetValue(outer, out CompPipeCell pipe))
+		{
+			return false;
+		}
+		int g = pipe.DirGroup(port.WorldRot.Opposite);
+		if (g == CompPipeCell.GroupNone || g != PortChannelGroup(port))
+		{
+			return false;
+		}
+		return componentCells.Contains((outer, g));
 	}
 
 	private void BuildPipeAdjacentMappings(HashSet<long> linkedPairs)
 	{
-		HashSet<IntVec3> visitedPipe = new HashSet<IntVec3>();
+		HashSet<(IntVec3 cell, int channel)> visitedPipe = new HashSet<(IntVec3, int)>();
+		List<HashSet<(IntVec3 cell, int channel)>> components = new List<HashSet<(IntVec3, int)>>();
+		HashSet<IntVec3> affected = new HashSet<IntVec3>();
 		foreach (KeyValuePair<IntVec3, CompPipeCell> kv in cellToPipe)
 		{
-			IntVec3 seed = kv.Key;
-			if (visitedPipe.Contains(seed))
-			{
-				continue;
-			}
-
-			// 收集本管道连通分量（4 邻，cellToPipe 可达）
-			HashSet<IntVec3> componentSet = new HashSet<IntVec3>();
-			Queue<IntVec3> flood = new Queue<IntVec3>();
-			flood.Enqueue(seed);
-			visitedPipe.Add(seed);
-			componentSet.Add(seed);
-			while (flood.Count > 0)
-			{
-				IntVec3 c = flood.Dequeue();
-				foreach (IntVec3 dir in GenAdj.CardinalDirections)
-				{
-					IntVec3 n = c + dir;
-					if (!n.InBounds(map) || visitedPipe.Contains(n) || !cellToPipe.ContainsKey(n))
-					{
-						continue;
-					}
-					visitedPipe.Add(n);
-					flood.Enqueue(n);
-					componentSet.Add(n);
-				}
-			}
-			BuildPipeComponent(componentSet, linkedPairs);
+			FloodComponentFromAllChannels(kv.Key, kv.Value, visitedPipe, components, affected);
+		}
+		for (int i = 0; i < components.Count; i++)
+		{
+			BuildPipeComponent(components[i], linkedPairs);
 		}
 	}
 
 	/// <summary>
-	/// 对单个管道连通分量：附件收集（扫 members×ports，outerCell ∈ 分量）+ 多源 BFS Voronoi 交界建 Mapping。
+	/// 对单个管道连通分量（节点 = 格子×通道）：附件收集（端口组匹配）+ 多源 BFS Voronoi 交界建 Mapping。
 	/// 局部重建与整图重建共用（分量级主体）。
 	/// </summary>
-	private void BuildPipeComponent(HashSet<IntVec3> componentSet, HashSet<long> linkedPairs)
+	private void BuildPipeComponent(HashSet<(IntVec3 cell, int channel)> componentSet, HashSet<long> linkedPairs)
 	{
-		List<IntVec3> component = new List<IntVec3>(componentSet);
+		List<(IntVec3 cell, int channel)> component = new List<(IntVec3, int)>(componentSet);
 
-		// 1) 找出所有外一格落在本分量上的端口挂接
+		// 1) 找出所有接入节点落在本分量上的端口挂接（端口组必须等于管道格该方向出口组）
 		List<PipeAttachment> attachments = new List<PipeAttachment>();
 		for (int i = 0; i < members.Count; i++)
 		{
@@ -2373,7 +2477,16 @@ public class MapComponent_PipeNetwork : MapComponent
 			{
 				Port port = m.Ports[p];
 				IntVec3 outer = port.OuterCell;
-				if (!componentSet.Contains(outer))
+				if (!cellToPipe.TryGetValue(outer, out CompPipeCell pipe))
+				{
+					continue;
+				}
+				int g = pipe.DirGroup(port.WorldRot.Opposite);
+				if (g == CompPipeCell.GroupNone || g != PortChannelGroup(port))
+				{
+					continue;
+				}
+				if (!componentSet.Contains((outer, g)))
 				{
 					continue;
 				}
@@ -2387,7 +2500,8 @@ public class MapComponent_PipeNetwork : MapComponent
 					member = m,
 					port = port,
 					container = cont,
-					outerCell = outer
+					outerCell = outer,
+					channel = g
 				});
 			}
 		}
@@ -2396,39 +2510,53 @@ public class MapComponent_PipeNetwork : MapComponent
 			return;
 		}
 
-		// 2) 多源 BFS：每个挂接点 outerCell 为领地种子，交界建 Mapping
-		Dictionary<IntVec3, int> owner = new Dictionary<IntVec3, int>();
-		Queue<IntVec3> q = new Queue<IntVec3>();
+		// 2) 多源 BFS（节点空间）：每个挂接节点为领地种子，交界建 Mapping
+		Dictionary<(IntVec3, int), int> owner = new Dictionary<(IntVec3, int), int>();
+		Queue<(IntVec3 cell, int channel)> q = new Queue<(IntVec3, int)>();
 		for (int i = 0; i < attachments.Count; i++)
 		{
-			IntVec3 cell = attachments[i].outerCell;
-			if (owner.ContainsKey(cell))
+			(IntVec3, int) node = (attachments[i].outerCell, attachments[i].channel);
+			if (owner.TryGetValue(node, out int other))
 			{
-				// 两端口抢同一格：直接视为邻接
-				int other = owner[cell];
+				// 两端口抢同一节点：直接视为邻接
 				if (other != i)
 				{
 					AddPipePair(attachments[other], attachments[i], linkedPairs, component, componentSet);
 				}
 				continue;
 			}
-			owner[cell] = i;
-			q.Enqueue(cell);
+			owner[node] = i;
+			q.Enqueue(node);
 		}
 
 		HashSet<long> borderPairs = new HashSet<long>();
 		while (q.Count > 0)
 		{
-			IntVec3 cell = q.Dequeue();
-			int id = owner[cell];
-			foreach (IntVec3 dir in GenAdj.CardinalDirections)
+			(IntVec3 cell, int ch) = q.Dequeue();
+			int id = owner[(cell, ch)];
+			if (!cellToPipe.TryGetValue(cell, out CompPipeCell pipe))
 			{
-				IntVec3 n = cell + dir;
-				if (!componentSet.Contains(n))
+				continue;
+			}
+			for (int i = 0; i < 4; i++)
+			{
+				// 格内只沿本通道方向走（跨组隔离）
+				if (pipe.DirGroup(new Rot4(i)) != ch)
 				{
 					continue;
 				}
-				if (owner.TryGetValue(n, out int otherId))
+				IntVec3 n = cell + GenAdj.CardinalDirections[i];
+				if (!n.InBounds(map) || !cellToPipe.TryGetValue(n, out CompPipeCell nPipe))
+				{
+					continue;
+				}
+				int nCh = nPipe.DirGroup(new Rot4(i).Opposite);
+				if (nCh == CompPipeCell.GroupNone)
+				{
+					continue;
+				}
+				(IntVec3, int) node = (n, nCh);
+				if (owner.TryGetValue(node, out int otherId))
 				{
 					if (otherId != id)
 					{
@@ -2440,8 +2568,8 @@ public class MapComponent_PipeNetwork : MapComponent
 					}
 					continue;
 				}
-				owner[n] = id;
-				q.Enqueue(n);
+				owner[node] = id;
+				q.Enqueue(node);
 			}
 		}
 	}
@@ -2450,8 +2578,8 @@ public class MapComponent_PipeNetwork : MapComponent
 		PipeAttachment a,
 		PipeAttachment b,
 		HashSet<long> linkedPairs,
-		List<IntVec3> component,
-		HashSet<IntVec3> componentSet)
+		List<(IntVec3 cell, int channel)> component,
+		HashSet<(IntVec3 cell, int channel)> componentSet)
 	{
 		List<Building> attached = new List<Building>();
 		if (a.member.parent is Building ba)
@@ -2464,12 +2592,12 @@ public class MapComponent_PipeNetwork : MapComponent
 		}
 		for (int i = 0; i < component.Count; i++)
 		{
-			if (cellToPipe.TryGetValue(component[i], out CompPipeCell pipe) && pipe.parent is Building pb && !attached.Contains(pb))
+			if (cellToPipe.TryGetValue(component[i].cell, out CompPipeCell pipe) && pipe.parent is Building pb && !attached.Contains(pb))
 			{
 				attached.Add(pb);
 			}
 		}
-		int pathPipeCells = ShortestPipePathCellCount(a.outerCell, b.outerCell, componentSet);
+		int pathPipeCells = ShortestPipePathCellCount((a.outerCell, a.channel), (b.outerCell, b.channel), componentSet);
 		TryAddPair(
 			a.container,
 			b.container,
@@ -2480,8 +2608,11 @@ public class MapComponent_PipeNetwork : MapComponent
 			pathPipeCells);
 	}
 
-	/// <summary>管道分量内两挂接格最短路径的格数（含起终；同格=1）。失败返回 0。</summary>
-	private static int ShortestPipePathCellCount(IntVec3 start, IntVec3 end, HashSet<IntVec3> componentSet)
+	/// <summary>管道分量内两挂接节点最短路径的格数（含起终；同节点=1）。失败返回 0。</summary>
+	private int ShortestPipePathCellCount(
+		(IntVec3 cell, int channel) start,
+		(IntVec3 cell, int channel) end,
+		HashSet<(IntVec3 cell, int channel)> componentSet)
 	{
 		if (!componentSet.Contains(start) || !componentSet.Contains(end))
 		{
@@ -2491,25 +2622,43 @@ public class MapComponent_PipeNetwork : MapComponent
 		{
 			return 1;
 		}
-		Queue<IntVec3> q = new Queue<IntVec3>();
-		Dictionary<IntVec3, IntVec3> prev = new Dictionary<IntVec3, IntVec3>();
+		Queue<(IntVec3, int)> q = new Queue<(IntVec3, int)>();
+		Dictionary<(IntVec3, int), (IntVec3, int)> prev = new Dictionary<(IntVec3, int), (IntVec3, int)>();
 		q.Enqueue(start);
 		prev[start] = start;
 		while (q.Count > 0)
 		{
-			IntVec3 c = q.Dequeue();
-			foreach (IntVec3 dir in GenAdj.CardinalDirections)
+			(IntVec3 c, int ch) = q.Dequeue();
+			if (!cellToPipe.TryGetValue(c, out CompPipeCell pipe))
 			{
-				IntVec3 n = c + dir;
-				if (!componentSet.Contains(n) || prev.ContainsKey(n))
+				continue;
+			}
+			for (int i = 0; i < 4; i++)
+			{
+				if (pipe.DirGroup(new Rot4(i)) != ch)
 				{
 					continue;
 				}
-				prev[n] = c;
-				if (n == end)
+				IntVec3 n = c + GenAdj.CardinalDirections[i];
+				if (!n.InBounds(map) || !cellToPipe.TryGetValue(n, out CompPipeCell nPipe))
+				{
+					continue;
+				}
+				int nCh = nPipe.DirGroup(new Rot4(i).Opposite);
+				if (nCh == CompPipeCell.GroupNone)
+				{
+					continue;
+				}
+				(IntVec3, int) node = (n, nCh);
+				if (prev.ContainsKey(node))
+				{
+					continue;
+				}
+				prev[node] = (c, ch);
+				if (node == end)
 				{
 					int count = 1;
-					IntVec3 walk = n;
+					(IntVec3, int) walk = node;
 					while (walk != start)
 					{
 						count++;
@@ -2517,7 +2666,7 @@ public class MapComponent_PipeNetwork : MapComponent
 					}
 					return count;
 				}
-				q.Enqueue(n);
+				q.Enqueue(node);
 			}
 		}
 		return 0;
@@ -2834,8 +2983,10 @@ public class MapComponent_PipeNetwork : MapComponent
 				{
 					continue;
 				}
-				float dHot = -q / mHot;
-				float dCold = q / mCold;
+				float cHot = HeatSolver.SpecificHeatOf(hot);
+				float cCold = HeatSolver.SpecificHeatOf(cold);
+				float dHot = -q / (mHot * cHot);
+				float dCold = q / (mCold * cCold);
 				heatStepDelta.TryGetValue(hot, out float dh);
 				heatStepDelta[hot] = dh + dHot;
 				heatStepDelta.TryGetValue(cold, out float dc);
@@ -2936,7 +3087,7 @@ public class MapComponent_PipeNetwork : MapComponent
 			return;
 		}
 		float q = n * rx.heatPerBatch;
-		float dT = q / tgt.amount;
+		float dT = q / (tgt.amount * HeatSolver.SpecificHeatOf(tgt));
 		pendingTempDeltas.TryGetValue(tgt, out float cur);
 		pendingTempDeltas[tgt] = cur + dT;
 		WakeContainer(tgt, "chemHeat");
@@ -3235,8 +3386,9 @@ public class MapComponent_PipeNetwork : MapComponent
 				{
 					continue;
 				}
-				// 先按 |ΔT|/2*m 与 maxRate 取基值，再乘 (1-insulation)，保证保温一定拉开 Q
-				float qBase = System.Math.Abs(dT) / 2f * m;
+				// 驱动上限也换热容（|ΔT|/2·m·c），保证收敛速度与比热无关；再乘 (1-insulation) 拉开保温差距
+				float spHeat = HeatSolver.SpecificHeatOf(cont);
+				float qBase = System.Math.Abs(dT) / 2f * m * spHeat;
 				if (qBase > maxRate)
 				{
 					qBase = maxRate;
@@ -3246,7 +3398,7 @@ public class MapComponent_PipeNetwork : MapComponent
 				{
 					continue;
 				}
-				float tNew = cont.temperature - (dT > 0f ? 1f : -1f) * qWant / m;
+				float tNew = cont.temperature - (dT > 0f ? 1f : -1f) * qWant / (m * spHeat);
 				cont.CommitTemperature(tNew);
 				// 流体变凉 → 房间得热(+Q)；流体变热 → 房间失热(-Q)；失败不回滚 T
 				if (canPushRoomHeat)

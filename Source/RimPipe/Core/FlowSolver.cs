@@ -5,8 +5,10 @@ namespace RimPipe;
 /// <summary>
 /// 流量怎么算 want（本批想搬多少）：
 ///   Equalize：先看两边填充比压力 P=amount/capacity，
-///     drive = |ΔP|/2 * min(两边容量)，再和 rate、高侧存量、低侧空位取 min。
-///   Forced（泵）：方向由 forcedFromA 写死；want = min(maxFlowRate, 源侧存量, 目标空位)。
+///     drive = |ΔP|/2 * min(两边容量)，再和 rateCap、高侧存量、低侧空位取 min。
+///   Forced（泵）：方向由 forcedFromA 写死；want = min(rateCap, 源侧存量, 目标空位)。
+///   rateCap = maxFlowRate / fluid.viscosity：粘度缩放流量上限（泵同样吃粘度）；
+///   泄漏扣量不走这里（破口=大气孔，不吃粘度）。
 /// 边不完整或 leakOpen → want=0（泄漏放到 Commit 里扣）；两边流体种类不同 → want=0 并打日志。
 /// 批内欠松弛可以用「虚拟量」试算；压力必须跟着虚拟量当场重算。
 /// </summary>
@@ -55,12 +57,19 @@ public static class FlowSolver
 			return 0f;
 		}
 
-		if (mapping.flowDrive == FlowDriveMode.Forced)
+		float viscosity = a.fluid.viscosity;
+		if (viscosity <= 0f)
 		{
-			return ComputeForcedWant(mapping, a, b, amountA, amountB, out source, out target);
+			// Def 校验已拦；兜底防除零
+			return 0f;
 		}
 
-		return ComputeEqualizeWant(mapping, a, b, amountA, amountB, out source, out target);
+		if (mapping.flowDrive == FlowDriveMode.Forced)
+		{
+			return ComputeForcedWant(mapping, a, b, amountA, amountB, viscosity, out source, out target);
+		}
+
+		return ComputeEqualizeWant(mapping, a, b, amountA, amountB, viscosity, out source, out target);
 	}
 
 	private static float ComputeForcedWant(
@@ -69,6 +78,7 @@ public static class FlowSolver
 		Container b,
 		float amountA,
 		float amountB,
+		float viscosity,
 		out Container? source,
 		out Container? target)
 	{
@@ -86,7 +96,8 @@ public static class FlowSolver
 			return 0f;
 		}
 
-		float want = mapping.maxFlowRate;
+		// 泵也吃粘度：高粘流体同样压不动（与 Equalize 一致的 rateCap）
+		float want = mapping.maxFlowRate / viscosity;
 		if (want > amountSrc)
 		{
 			want = amountSrc;
@@ -111,6 +122,7 @@ public static class FlowSolver
 		Container b,
 		float amountA,
 		float amountB,
+		float viscosity,
 		out Container? source,
 		out Container? target)
 	{
@@ -163,9 +175,10 @@ public static class FlowSolver
 		float minCap = capHi < capLo ? capHi : capLo;
 		float drive = (pHi - pLo) / 2f * minCap;
 		float want = drive;
-		if (want > mapping.maxFlowRate)
+		float rateCap = mapping.maxFlowRate / viscosity;
+		if (want > rateCap)
 		{
-			want = mapping.maxFlowRate;
+			want = rateCap;
 		}
 		if (want > amountHi)
 		{

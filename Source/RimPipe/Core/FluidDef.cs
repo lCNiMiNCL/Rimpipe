@@ -19,4 +19,32 @@ public class FluidDef : Def
 
 	/// <summary>每单位销毁量推入的热量（正加热，负降温；默认 5）。</summary>
 	public float leakHeatEnergyPerUnit = 5f;
+
+	/// <summary>
+	/// 粘度：流动阻力系数。批内按 rateCap = maxFlowRate / viscosity 缩流量，
+	/// 越大流得越慢（水基准 1）。只作用于正常流动；泄漏扣量不吃粘度。
+	/// </summary>
+	public float viscosity = 1f;
+
+	/// <summary>
+	/// 比热：同样热量下温度变化率。ΔT = Q / (m·specificHeat)，越大升温越慢。
+	/// 作用于导热 / 环境散热 / 反应热三处温变；混温（同流体）与之无关。
+	/// </summary>
+	public float specificHeat = 1f;
+
+	public override IEnumerable<string> ConfigErrors()
+	{
+		foreach (string e in base.ConfigErrors())
+		{
+			yield return e;
+		}
+		if (viscosity <= 0f)
+		{
+			yield return "FluidDef viscosity 必须 > 0。";
+		}
+		if (specificHeat <= 0f)
+		{
+			yield return "FluidDef specificHeat 必须 > 0。";
+		}
+	}
 }

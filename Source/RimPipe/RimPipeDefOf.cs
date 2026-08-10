@@ -8,6 +8,8 @@ public static class RimPipeDefOf
 {
 	public static FluidDef RimPipe_Fluid_TestWater = null!;
 	public static FluidDef RimPipe_Fluid_TestFuel = null!;
+	public static FluidDef RimPipe_Fluid_TestThick = null!;
+	public static FluidDef RimPipe_Fluid_TestHeatSink = null!;
 	public static FluidDef RimPipe_Fluid_LOX = null!;
 	public static FluidDef RimPipe_Fluid_RP1 = null!;
 	public static FluidDef RimPipe_Fluid_TestExhaust = null!;

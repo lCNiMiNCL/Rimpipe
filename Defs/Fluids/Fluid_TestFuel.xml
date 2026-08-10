@@ -4,7 +4,7 @@
   <RimPipe.FluidDef>
     <defName>RimPipe_Fluid_TestFuel</defName>
     <label>测试燃料</label>
-    <description>验收用可燃液体。泄漏时扣量，并留下燃油污渍、让房间升温。</description>
+    <description>验收用可燃液体。泄漏时扣量，并留下燃油污渍、让房间升温。粘度 1 / 比热 1 基准。</description>
     <leakEffects>
       <li>Filth</li>
       <li>Temperature</li>
@@ -12,5 +12,7 @@
     <leakFilthDef>Filth_Fuel</leakFilthDef>
     <leakFilthUnitsPerFilth>10</leakFilthUnitsPerFilth>
     <leakHeatEnergyPerUnit>5</leakHeatEnergyPerUnit>
+    <viscosity>1</viscosity>
+    <specificHeat>1</specificHeat>
   </RimPipe.FluidDef>
 </Defs>

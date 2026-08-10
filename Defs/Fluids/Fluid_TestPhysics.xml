@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Defs>
+
+  <!-- 物理量验收流体：高粘度（流速慢）、高比热（温变慢）。只进 Debug 验收，不进玩法 -->
+  <RimPipe.FluidDef>
+    <defName>RimPipe_Fluid_TestThick</defName>
+    <label>测试稠液</label>
+    <description>验收用高粘度液体。粘度 2 / 比热 1：同样管道里流得比水慢一半。</description>
+    <leakEffects>
+      <li>None</li>
+    </leakEffects>
+    <viscosity>2</viscosity>
+    <specificHeat>1</specificHeat>
+  </RimPipe.FluidDef>
+
+  <RimPipe.FluidDef>
+    <defName>RimPipe_Fluid_TestHeatSink</defName>
+    <label>测试高比热液</label>
+    <description>验收用高比热液体。粘度 1 / 比热 2：同样热量下温度变化只有水的一半。</description>
+    <leakEffects>
+      <li>None</li>
+    </leakEffects>
+    <viscosity>1</viscosity>
+    <specificHeat>2</specificHeat>
+  </RimPipe.FluidDef>
+
+</Defs>

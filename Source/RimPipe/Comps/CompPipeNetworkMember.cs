@@ -104,6 +104,7 @@ public class CompPipeNetworkMember : ThingComp
 				{
 					localRot = pp.localRot,
 					containerIndex = pp.containerIndex,
+					channel = pp.channel,
 					owner = this
 				});
 			}

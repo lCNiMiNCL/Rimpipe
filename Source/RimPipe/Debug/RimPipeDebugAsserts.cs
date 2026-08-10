@@ -327,6 +327,198 @@ internal static class RimPipeDebugAsserts
 		return AssertPumpForcedBatch();
 	}
 
+	/// <summary>
+	/// DirtyTopo 局部重建回归：泵排出侧外部边必须保持 Forced；
+	/// 拆掉再原位重放排出侧管道（触发局部重建）后，不动泵仍应保持逆压差抽送。
+	/// 修复前：局部重建只重做脏构件内部边，泵邻接缓存残留已删旧边，新建边退回 Equalize。
+	/// </summary>
+	internal static bool AssertPumpDriveAfterLocalRebuild()
+	{
+		Map map = Find.CurrentMap;
+		MapComponent_PipeNetwork? net = map?.GetComponent<MapComponent_PipeNetwork>();
+		if (net == null || map == null)
+		{
+			return false;
+		}
+		if (!TryFindPumpPipeScene(net, out Building? pumpBuilding, out CompPipeNetworkMember? left,
+			    out CompPipeNetworkMember? right, out CompPipeCell? pipeR, out IntVec3 pipeRPos)
+		    || pumpBuilding == null || left == null || right == null || pipeR == null)
+		{
+			Log.Warning("[RimPipe] 断言泵局部重建：未找到 罐—管—泵—管—罐 布局（先生成泵局部重建场景）。");
+			return false;
+		}
+		CompPipePump? pump = pumpBuilding.GetComp<CompPipePump>();
+		CompPipeNetworkMember? pumpMem = pumpBuilding.GetComp<CompPipeNetworkMember>();
+		if (pump == null || pumpMem == null || pumpMem.Containers.Count < 2)
+		{
+			return false;
+		}
+		if (!pump.IsOpen || !pump.HasPower || pump.EffectiveMaxFlowRate <= 0f)
+		{
+			Log.Warning("[RimPipe] 断言泵局部重建：泵未开或无电，先开泵再断言。");
+			return false;
+		}
+		Container inlet = pumpMem.Containers[pump.Props.containerIndexA];
+		Container outlet = pumpMem.Containers[pump.Props.containerIndexB];
+		FluidDef fluid = RimPipeDefOf.RimPipe_Fluid_TestWater;
+		// 泵两岸小桶清空 + 罐体重置，保证两轮测量都从「管道未灌满」的同一起点出发
+		void ResetTanksAndBuckets()
+		{
+			inlet.fluid = fluid;
+			outlet.fluid = fluid;
+			net.DebugFillContainer(inlet, 0f);
+			net.DebugFillContainer(outlet, 0f);
+			left.Containers[0].fluid = fluid;
+			right.Containers[0].fluid = fluid;
+			net.DebugFillContainer(left.Containers[0], 0.2f);
+			net.DebugFillContainer(right.Containers[0], 0.8f);
+		}
+
+		// 1) 结构断言：重建前排出侧外部边必须是 Forced
+		Mapping? outletEdge = FindExternalEdgeTouching(net, outlet, inlet);
+		bool driveBefore = outletEdge != null && outletEdge.flowDrive == FlowDriveMode.Forced;
+
+		// 2) 行为断言：先验证逆压差抽送可用（右增 ≥ 阈值）
+		ResetTanksAndBuckets();
+		float r0 = right.Containers[0].amount;
+		net.DebugForceOneBatch();
+		float gainBefore = right.Containers[0].amount - r0;
+
+		// 3) 触发局部重建但不改变连通：拆掉排出侧管道，再原位重放
+		RimPipeDebugUtil.DestroyAt(map, pipeRPos);
+		net.DebugProcessTopology();
+		GenSpawn.Spawn(RimPipeDefOf.RimPipe_Pipe, pipeRPos, map, Rot4.North);
+		net.DebugProcessTopology();
+
+		// 4) 不动泵：结构 + 行为双重再断言
+		outletEdge = FindExternalEdgeTouching(net, outlet, inlet);
+		bool driveAfter = outletEdge != null && outletEdge.flowDrive == FlowDriveMode.Forced;
+		ResetTanksAndBuckets();
+		float r1 = right.Containers[0].amount;
+		net.DebugForceOneBatch();
+		float gainAfter = right.Containers[0].amount - r1;
+
+		const float gainTol = 3f;
+		bool ok = driveBefore && driveAfter && gainBefore >= gainTol && gainAfter >= gainTol;
+		if (ok)
+		{
+			Log.Message(
+				$"[RimPipe] 泵局部重建通过：排出侧Forced={driveAfter} " +
+				$"重建前右增{gainBefore:0.##} 重建后右增{gainAfter:0.##}（左20/右80 逆压差抽送保持）");
+			Messages.Message("[RimPipe] 泵局部重建通过", MessageTypeDefOf.TaskCompletion, historical: false);
+			return true;
+		}
+		Log.Error(
+			$"[RimPipe] 泵局部重建失败：driveBefore={driveBefore} driveAfter={driveAfter} " +
+			$"重建前右增{gainBefore:0.##} 重建后右增{gainAfter:0.##}（阈={gainTol}）\n{net.Dump()}");
+		Messages.Message("[RimPipe] 泵局部重建失败", MessageTypeDefOf.RejectInput, historical: false);
+		return false;
+	}
+
+	/// <summary>找「罐—管—泵—管—罐」横排：最新泵及其两侧管道格、左右罐。</summary>
+	private static bool TryFindPumpPipeScene(
+		MapComponent_PipeNetwork net,
+		out Building? pumpBuilding,
+		out CompPipeNetworkMember? left,
+		out CompPipeNetworkMember? right,
+		out CompPipeCell? pipeR,
+		out IntVec3 pipeRPos)
+	{
+		pumpBuilding = null;
+		left = null;
+		right = null;
+		pipeR = null;
+		pipeRPos = IntVec3.Invalid;
+		Building? best = null;
+		for (int i = 0; i < net.Members.Count; i++)
+		{
+			CompPipeNetworkMember m = net.Members[i];
+			if (m.parent.def != RimPipeDefOf.RimPipe_Pump || m.parent is not Building b)
+			{
+				continue;
+			}
+			if (RimPipeDebugUtil.IsNewer(b, best))
+			{
+				best = b;
+			}
+		}
+		if (best == null)
+		{
+			return false;
+		}
+		pumpBuilding = best;
+		IntVec3 pumpPos = best.Position;
+		IntVec3 pipeLPos = pumpPos + IntVec3.West;
+		IntVec3 pipeRPosLocal = pumpPos + IntVec3.East;
+		IntVec3 leftPos = pumpPos + new IntVec3(-2, 0, 0);
+		IntVec3 rightPos = pumpPos + new IntVec3(2, 0, 0);
+
+		bool hasPipeL = false;
+		for (int i = 0; i < net.PipeCells.Count; i++)
+		{
+			CompPipeCell p = net.PipeCells[i];
+			if (p?.parent == null)
+			{
+				continue;
+			}
+			if (p.parent.Position == pipeLPos)
+			{
+				hasPipeL = true;
+			}
+			else if (p.parent.Position == pipeRPosLocal)
+			{
+				pipeR = p;
+			}
+		}
+		if (!hasPipeL || pipeR == null)
+		{
+			return false;
+		}
+		pipeRPos = pipeRPosLocal;
+		for (int i = 0; i < net.Members.Count; i++)
+		{
+			CompPipeNetworkMember m = net.Members[i];
+			if (!RimPipeDebugUtil.IsTankDef(m.parent.def))
+			{
+				continue;
+			}
+			if (m.parent.Position == leftPos)
+			{
+				left = m;
+			}
+			else if (m.parent.Position == rightPos)
+			{
+				right = m;
+			}
+		}
+		return left != null && right != null;
+	}
+
+	/// <summary>找一端是 pumpContainer、另一端不是另一泵桶的外部 Flow 边。</summary>
+	private static Mapping? FindExternalEdgeTouching(
+		MapComponent_PipeNetwork net,
+		Container pumpContainer,
+		Container otherPumpContainer)
+	{
+		for (int i = 0; i < net.Mappings.Count; i++)
+		{
+			Mapping m = net.Mappings[i];
+			if (m.mappingType != MappingType.Flow || m.IsIncomplete || m.containerA == null || m.containerB == null)
+			{
+				continue;
+			}
+			bool touchesPump = ReferenceEquals(m.containerA, pumpContainer)
+				|| ReferenceEquals(m.containerB, pumpContainer);
+			bool touchesOther = ReferenceEquals(m.containerA, otherPumpContainer)
+				|| ReferenceEquals(m.containerB, otherPumpContainer);
+			if (touchesPump && !touchesOther)
+			{
+				return m;
+			}
+		}
+		return null;
+	}
+
 	/// <summary>认 thingID 最新的泵及其东西贴脸储罐。</summary>
 	private static bool TryFindNewestPumpScene(
 		MapComponent_PipeNetwork net,
@@ -2258,5 +2450,275 @@ internal static class RimPipeDebugAsserts
 		wantRp1 = expectN * perIn[1];
 		wantEx = expectN * b.reaction.outputs[0].stoichAmount * expectEta;
 		return true;
+	}
+
+	/// <summary>定位指定坐标的构件（ThingComp）；没有返回 null。</summary>
+	private static CompPipeNetworkMember? TankMemberAt(Map map, IntVec3 cell)
+	{
+		List<Thing> things = map.thingGrid.ThingsListAtFast(cell);
+		for (int i = 0; i < things.Count; i++)
+		{
+			if (things[i] is ThingWithComps twc)
+			{
+				CompPipeNetworkMember? c = twc.GetComp<CompPipeNetworkMember>();
+				if (c != null)
+				{
+					return c;
+				}
+			}
+		}
+		return null;
+	}
+
+	/// <summary>找双通道十字格（A={E,W} B={N,S}）；找不到返回 false。</summary>
+	private static bool TryFindChannelCross(
+		MapComponent_PipeNetwork net,
+		out CompPipeCell? center,
+		out CompPipeNetworkMember? east,
+		out CompPipeNetworkMember? west,
+		out CompPipeNetworkMember? north,
+		out CompPipeNetworkMember? south)
+	{
+		center = null;
+		east = west = north = south = null;
+		// A={E,W}=bit1|bit3=0b1010；B={N,S}=bit0|bit2=0b0101
+		for (int i = 0; i < net.PipeCells.Count; i++)
+		{
+			CompPipeCell p = net.PipeCells[i];
+			if (p != null && p.groupAMask == 0b1010u && p.groupBMask == 0b0101u)
+			{
+				center = p;
+				break;
+			}
+		}
+		if (center == null || center.parent == null)
+		{
+			return false;
+		}
+		Map map = center.parent.Map;
+		IntVec3 cc = center.parent.Position;
+		east = TankMemberAt(map, cc + IntVec3.East);
+		west = TankMemberAt(map, cc + IntVec3.West);
+		north = TankMemberAt(map, cc + IntVec3.North);
+		south = TankMemberAt(map, cc + IntVec3.South);
+		return east != null && west != null && north != null && south != null
+			&& east.Containers.Count > 0 && west.Containers.Count > 0
+			&& north.Containers.Count > 0 && south.Containers.Count > 0;
+	}
+
+	internal static bool AssertChannelCross()
+	{
+		Map map = Find.CurrentMap;
+		MapComponent_PipeNetwork? net = map?.GetComponent<MapComponent_PipeNetwork>();
+		if (net == null)
+		{
+			return false;
+		}
+		if (!TryFindChannelCross(net, out CompPipeCell? center, out CompPipeNetworkMember? east,
+			out CompPipeNetworkMember? west, out CompPipeNetworkMember? north, out CompPipeNetworkMember? south))
+		{
+			Log.Warning("[RimPipe] 断言通道十字：未找到双通道十字场景，请先生成。");
+			return false;
+		}
+
+		Container cEast = east!.Containers[0];
+		Container cWest = west!.Containers[0];
+		Container cNorth = north!.Containers[0];
+		Container cSouth = south!.Containers[0];
+		bool ew = net.HasFlowMappingBetween(cEast, cWest);
+		bool ns = net.HasFlowMappingBetween(cNorth, cSouth);
+		bool cross = net.HasFlowMappingBetween(cEast, cNorth) || net.HasFlowMappingBetween(cWest, cSouth);
+
+		float e0 = cEast.amount, w0 = cWest.amount, n0 = cNorth.amount, s0 = cSouth.amount;
+		for (int i = 0; i < 15; i++)
+		{
+			net.DebugForceOneBatch();
+		}
+		float e1 = cEast.amount, w1 = cWest.amount, n1 = cNorth.amount, s1 = cSouth.amount;
+		bool ewEq = System.Math.Abs(e1 - w1) < 1f;
+		bool nsEq = System.Math.Abs(n1 - s1) < 1f;
+		bool sep = System.Math.Abs(e1 - n1) > 5f;
+
+		bool ok = ew && ns && !cross && ewEq && nsEq && sep;
+		if (ok)
+		{
+			Log.Message(
+				$"[RimPipe] 双通道十字通过：EW={ew} NS={ns} 跨线={cross} " +
+				$"东 {e0:0.#}→{e1:0.#} 西 {w0:0.#}→{w1:0.#} 北 {n0:0.#}→{n1:0.#} 南 {s0:0.#}→{s1:0.#}");
+		}
+		else
+		{
+			Log.Error(
+				$"[RimPipe] 双通道十字失败：EW={ew} NS={ns} 跨线={cross} 东西均={ewEq} 南北均={nsEq} 隔离={sep} " +
+				$"东 {e0:0.#}→{e1:0.#} 西 {w0:0.#}→{w1:0.#} 北 {n0:0.#}→{n1:0.#} 南 {s0:0.#}→{s1:0.#}");
+		}
+		return ok;
+	}
+
+	internal static bool AssertChannelBreakRestore()
+	{
+		Map map = Find.CurrentMap;
+		MapComponent_PipeNetwork? net = map?.GetComponent<MapComponent_PipeNetwork>();
+		if (net == null)
+		{
+			return false;
+		}
+		if (!TryFindChannelCross(net, out CompPipeCell? center, out CompPipeNetworkMember? east,
+			out CompPipeNetworkMember? west, out _, out _) || center == null)
+		{
+			Log.Warning("[RimPipe] 断言方向断开恢复：未找到双通道十字场景，请先生成。");
+			return false;
+		}
+
+		Container cEast = east!.Containers[0];
+		Container cWest = west!.Containers[0];
+		bool before = net.HasFlowMappingBetween(cEast, cWest);
+
+		// 断开：把东方向从 A 组移除（东出口全关）
+		center.SetDir(Rot4.East, CompPipeCell.GroupA, false);
+		net.DebugProcessTopology();
+		bool afterBreak = net.HasFlowMappingBetween(cEast, cWest);
+
+		// 恢复
+		center.SetDir(Rot4.East, CompPipeCell.GroupA, true);
+		net.DebugProcessTopology();
+		bool afterRestore = net.HasFlowMappingBetween(cEast, cWest);
+
+		bool ok = before && !afterBreak && afterRestore;
+		if (ok)
+		{
+			Log.Message($"[RimPipe] 方向断开恢复通过：前={before} 断={afterBreak} 恢复={afterRestore}");
+		}
+		else
+		{
+			Log.Error($"[RimPipe] 方向断开恢复失败：前={before} 断={afterBreak} 恢复={afterRestore}");
+		}
+		return ok;
+	}
+
+	internal static bool AssertViscosity()
+	{
+		Map map = Find.CurrentMap;
+		MapComponent_PipeNetwork? net = map?.GetComponent<MapComponent_PipeNetwork>();
+		if (net == null)
+		{
+			return false;
+		}
+		Mapping? thickM = null;
+		Mapping? waterM = null;
+		// 基准线用 TestFuel（v=1 c=1），与稠液线唯一区分
+		FluidDef water = RimPipeDefOf.RimPipe_Fluid_TestFuel;
+		FluidDef thick = RimPipeDefOf.RimPipe_Fluid_TestThick;
+		for (int i = 0; i < net.Mappings.Count; i++)
+		{
+			Mapping m = net.Mappings[i];
+			if (m.mappingType != MappingType.Flow || m.IsIncomplete || m.containerA == null || m.containerB == null)
+			{
+				continue;
+			}
+			if (m.containerA.fluid == thick && m.containerB.fluid == thick && thickM == null)
+			{
+				thickM = m;
+			}
+			else if (m.containerA.fluid == water && m.containerB.fluid == water && waterM == null)
+			{
+				waterM = m;
+			}
+		}
+		if (thickM == null || waterM == null)
+		{
+			Log.Warning("[RimPipe] 断言粘度：未找到水/稠液直列场景，请先生成。");
+			return false;
+		}
+
+		Container wSrc = waterM.containerA!.amount > waterM.containerB!.amount ? waterM.containerA : waterM.containerB;
+		Container wDst = ReferenceEquals(wSrc, waterM.containerA) ? waterM.containerB! : waterM.containerA!;
+		Container tSrc = thickM.containerA!.amount > thickM.containerB!.amount ? thickM.containerA : thickM.containerB;
+		Container tDst = ReferenceEquals(tSrc, thickM.containerA) ? thickM.containerB! : thickM.containerA!;
+
+		net.DebugFillContainer(wSrc, 1f);
+		net.DebugFillContainer(wDst, 0f);
+		net.DebugFillContainer(tSrc, 1f);
+		net.DebugFillContainer(tDst, 0f);
+		float w0 = wDst.amount;
+		float t0 = tDst.amount;
+		// 只跑 1 批：粘度效果是收敛速度（单批 transfer 少）。
+		// 1 格管 rate=10：Jacobi 12 轮后水(rateCap=10) 单批≈43、稠液(rateCap=5) 单批≈27，差≈16；
+		// 批数越多越接近均衡（2 批时两者都≈50）断言失效。
+		net.DebugForceOneBatch();
+		float wDelta = wDst.amount - w0;
+		float tDelta = tDst.amount - t0;
+
+		bool ok = wDelta > tDelta + 2f;
+		if (ok)
+		{
+			Log.Message($"[RimPipe] 粘度通过：基准(v=1) 右增 {wDelta:0.##} > 稠液(v=2) 右增 {tDelta:0.##}");
+		}
+		else
+		{
+			Log.Error($"[RimPipe] 粘度失败：基准 右增 {wDelta:0.##} vs 稠液 右增 {tDelta:0.##}");
+		}
+		return ok;
+	}
+
+	internal static bool AssertSpecificHeat()
+	{
+		Map map = Find.CurrentMap;
+		MapComponent_PipeNetwork? net = map?.GetComponent<MapComponent_PipeNetwork>();
+		if (net == null)
+		{
+			return false;
+		}
+		Container? hot = null;
+		Container? cold = null;
+		FluidDef water = RimPipeDefOf.RimPipe_Fluid_TestWater;
+		FluidDef sink = RimPipeDefOf.RimPipe_Fluid_TestHeatSink;
+		for (int i = 0; i < net.Members.Count; i++)
+		{
+			CompPipeNetworkMember m = net.Members[i];
+			if (m?.parent == null || m.Containers.Count < 2)
+			{
+				continue;
+			}
+			if (m.parent.TryGetComp<CompPipeHeatExchanger>() == null)
+			{
+				continue;
+			}
+			if (m.Containers[0].fluid == water && m.Containers[1].fluid == sink)
+			{
+				hot = m.Containers[0];
+				cold = m.Containers[1];
+				break;
+			}
+		}
+		if (hot == null || cold == null)
+		{
+			Log.Warning("[RimPipe] 断言比热：未找到水/高比热换热器场景，请先生成。");
+			return false;
+		}
+
+		net.DebugFillContainer(hot, 1f);
+		net.DebugFillContainer(cold, 1f);
+		net.DebugSetTemperature(hot, 80f);
+		net.DebugSetTemperature(cold, 20f);
+		float h0 = hot.temperature;
+		float c0 = cold.temperature;
+		for (int i = 0; i < 2; i++)
+		{
+			net.DebugForceOneBatch();
+		}
+		float dHot = System.Math.Abs(hot.temperature - h0);
+		float dCold = System.Math.Abs(cold.temperature - c0);
+
+		bool ok = dHot > 0.1f && dCold > 0.05f && dHot > dCold * 1.5f;
+		if (ok)
+		{
+			Log.Message($"[RimPipe] 比热通过：水腔(c=1) 温变 {dHot:0.###} ≈ 2× 高比热腔(c=2) 温变 {dCold:0.###}");
+		}
+		else
+		{
+			Log.Error($"[RimPipe] 比热失败：水腔温变 {dHot:0.###} vs 高比热腔温变 {dCold:0.###}");
+		}
+		return ok;
 	}
 }

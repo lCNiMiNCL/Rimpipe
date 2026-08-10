@@ -51,6 +51,13 @@
   <RimPipe_Gizmo_PipeBreached>Pipe: breached</RimPipe_Gizmo_PipeBreached>
   <RimPipe_Gizmo_PipeIntact>Pipe: intact</RimPipe_Gizmo_PipeIntact>
   <RimPipe_Gizmo_PipeBreachDesc>Toggle breach. Breached path Mappings leak (drain connected Containers). Destroying the pipe breaks topology and stops leak; no dump by default.</RimPipe_Gizmo_PipeBreachDesc>
+  <RimPipe_Gizmo_GroupA>Channel group A</RimPipe_Gizmo_GroupA>
+  <RimPipe_Gizmo_GroupB>Channel group B</RimPipe_Gizmo_GroupB>
+  <RimPipe_Gizmo_GroupDesc>Channel group being edited: {0}. Directions in the same group connect inside this cell; different groups are isolated. Direction buttons below apply to this group.</RimPipe_Gizmo_GroupDesc>
+  <RimPipe_Gizmo_DirLabel>{0}</RimPipe_Gizmo_DirLabel>
+  <RimPipe_Gizmo_DirDesc>Whether direction {0} belongs to channel group {1}. When open, this cell connects that way (neighbor side must also be open).</RimPipe_Gizmo_DirDesc>
+  <RimPipe_Inspect_DirNone>(none)</RimPipe_Inspect_DirNone>
+  <RimPipe_Inspect_PipeDir>{0}: {1}    {2}: {3}</RimPipe_Inspect_PipeDir>
   <RimPipe_Gizmo_TankBreached>Tank: breached</RimPipe_Gizmo_TankBreached>
   <RimPipe_Gizmo_TankIntact>Tank: intact</RimPipe_Gizmo_TankIntact>
   <RimPipe_Gizmo_TankBreachDesc>Toggle breach. Breached tanks lose amount from this Container each batch (no pipe required).</RimPipe_Gizmo_TankBreachDesc>

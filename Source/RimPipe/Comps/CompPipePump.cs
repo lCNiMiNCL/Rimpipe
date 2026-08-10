@@ -192,6 +192,45 @@ public class CompPipePump : ThingComp, IPipeInternalMappingContributor
 		}
 	}
 
+	/// <summary>
+	/// DirtyTopo 局部重建后调用：泵旁边的管道边可能被删了又新建（退回 Equalize），
+	/// 重收邻接缓存并重新施加 Forced 驱动，避免旧引用残留导致泵失去逆压差抽送。
+	/// 注意：不清 internalMapping——非脏泵的内部边仍存活（脏泵已由 ContributeInternalMapping 处理，重复调用幂等）。
+	/// </summary>
+	public void RefreshAdjacentMappingsAfterLocalRebuild(MapComponent_PipeNetwork net)
+	{
+		if (!parent.Spawned || net == null)
+		{
+			return;
+		}
+		CompPipeNetworkMember? member = parent.GetComp<CompPipeNetworkMember>();
+		if (member == null || member.Containers.Count <= Props.containerIndexA
+			|| member.Containers.Count <= Props.containerIndexB)
+		{
+			return;
+		}
+		Container inlet = member.Containers[Props.containerIndexA];
+		Container outlet = member.Containers[Props.containerIndexB];
+
+		// 重收邻接边：丢弃已删的陈旧 Mapping，纳入本次局部重建新建的边
+		adjacentExternalMappings.Clear();
+		IReadOnlyList<Mapping> all = net.Mappings;
+		for (int i = 0; i < all.Count; i++)
+		{
+			Mapping m = all[i];
+			if (m == internalMapping || m.IsIncomplete || m.containerA == null || m.containerB == null)
+			{
+				continue;
+			}
+			if (Touches(m, inlet) || Touches(m, outlet))
+			{
+				adjacentExternalMappings.Add(m);
+			}
+		}
+		// 先恢复旧快照（若还有残留）→ 再对新鲜边快照并施加 Forced（幂等）
+		ApplyDriveToConnectedMappings(net);
+	}
+
 	private void SnapshotExternal(Mapping m)
 	{
 		for (int i = 0; i < externalSnapshots.Count; i++)

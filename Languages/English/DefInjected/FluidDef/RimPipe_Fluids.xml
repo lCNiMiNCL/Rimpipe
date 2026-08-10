@@ -16,4 +16,10 @@
   <RimPipe_Fluid_TestExhaust.label>test exhaust</RimPipe_Fluid_TestExhaust.label>
   <RimPipe_Fluid_TestExhaust.description>RimPipe chem demo combustion product placeholder. Leak effects: None.</RimPipe_Fluid_TestExhaust.description>
 
+  <RimPipe_Fluid_TestThick.label>test viscous fluid</RimPipe_Fluid_TestThick.label>
+  <RimPipe_Fluid_TestThick.description>RimPipe acceptance fluid: viscosity 2 / specific heat 1, flows half as fast as water in the same pipe.</RimPipe_Fluid_TestThick.description>
+
+  <RimPipe_Fluid_TestHeatSink.label>test high-heat-capacity fluid</RimPipe_Fluid_TestHeatSink.label>
+  <RimPipe_Fluid_TestHeatSink.description>RimPipe acceptance fluid: viscosity 1 / specific heat 2, heats/cools half as fast as water for the same heat.</RimPipe_Fluid_TestHeatSink.description>
+
 </LanguageData>

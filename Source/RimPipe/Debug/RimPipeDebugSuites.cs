@@ -84,6 +84,14 @@ public static class RimPipeDebugSuites
 				passed++;
 			}
 
+			// 5) 泵局部重建回归 @ z+18：管—泵—管，拆/重放排出侧管道后逆压差抽送保持
+			RimPipeDebugScenes.SpawnPumpPipeLocalScene(map, origin + new IntVec3(0, 0, 18));
+			total++;
+			if (RimPipeDebugAsserts.AssertPumpDriveAfterLocalRebuild())
+			{
+				passed++;
+			}
+
 			return (passed, total);
 		});
 	}
@@ -256,6 +264,50 @@ public static class RimPipeDebugSuites
 			RimPipeDebugScenes.SpawnSplitNetSleepScene(map, origin + new IntVec3(0, 0, 6));
 			total++;
 			if (RimPipeDebugAsserts.AssertSplitNetSleep())
+			{
+				passed++;
+			}
+
+			return (passed, total);
+		});
+	}
+
+	[DebugAction("RimPipe", "R-通道", false, false, false, false, false, 0, false,
+		actionType = DebugActionType.ToolMap,
+		allowedGameStates = AllowedGameStates.PlayingOnMap)]
+	private static void SuiteChannel()
+	{
+		RunQuiet("R-通道", (map, net, origin) =>
+		{
+			int passed = 0;
+			int total = 0;
+
+			// 1) 双通道十字隔离：A={E,W} B={N,S}，东西/南北各自均压、跨线不相连
+			RimPipeDebugScenes.SpawnChannelCrossScene(map, origin);
+			total++;
+			if (RimPipeDebugAsserts.AssertChannelCross())
+			{
+				passed++;
+			}
+			// 2) 方向断开/恢复：把东方向关掉再开回
+			total++;
+			if (RimPipeDebugAsserts.AssertChannelBreakRestore())
+			{
+				passed++;
+			}
+
+			// 3) 粘度：水(v=1) 比稠液(v=2) 流得快
+			RimPipeDebugScenes.SpawnViscosityScene(map, origin + new IntVec3(0, 0, 4));
+			total++;
+			if (RimPipeDebugAsserts.AssertViscosity())
+			{
+				passed++;
+			}
+
+			// 4) 比热：c=1 腔温变 ≈ 2× c=2 腔
+			RimPipeDebugScenes.SpawnSpecificHeatScene(map, origin + new IntVec3(0, 0, 8));
+			total++;
+			if (RimPipeDebugAsserts.AssertSpecificHeat())
 			{
 				passed++;
 			}

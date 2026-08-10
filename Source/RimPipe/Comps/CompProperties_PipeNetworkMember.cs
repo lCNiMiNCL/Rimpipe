@@ -15,6 +15,9 @@ public class PipePortProp
 	/// <summary>相对建筑默认朝向（North）的本地边。</summary>
 	public Rot4 localRot = Rot4.North;
 	public int containerIndex;
+
+	/// <summary>接入通道：0=A（默认），1=B。与管道格方向组对应。</summary>
+	public int channel;
 }
 
 public class CompProperties_PipeNetworkMember : CompProperties
@@ -59,6 +62,10 @@ public class CompProperties_PipeNetworkMember : CompProperties
 				if (ports[i].containerIndex < 0 || ports[i].containerIndex >= containers.Count)
 				{
 					yield return $"port[{i}] containerIndex {ports[i].containerIndex} 越界。";
+				}
+				if (ports[i].channel != 0 && ports[i].channel != 1)
+				{
+					yield return $"port[{i}] channel 只能为 0（A）或 1（B），当前 {ports[i].channel}。";
 				}
 			}
 		}

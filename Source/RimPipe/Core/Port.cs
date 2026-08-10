@@ -11,6 +11,13 @@ public class Port : IExposable
 {
 	public Rot4 localRot = Rot4.North;
 	public int containerIndex;
+
+	/// <summary>
+	/// 接入通道：0=A（默认），1=B。设备通过端口声明接入哪套连接组的管网；
+	/// 只与管道格「同组」的方向出口连通（管道格该方向出口属另一组则端口悬空）。
+	/// </summary>
+	public int channel;
+
 	public CompPipeNetworkMember? owner;
 
 	public Container? Container
@@ -53,5 +60,6 @@ public class Port : IExposable
 	{
 		Scribe_Values.Look(ref localRot, "localRot", Rot4.North);
 		Scribe_Values.Look(ref containerIndex, "containerIndex", 0);
+		Scribe_Values.Look(ref channel, "channel", 0);
 	}
 }
