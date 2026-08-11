@@ -30,3 +30,6 @@ Desktop.ini
 # IDE
 .idea/
 AGENTS.md
+.trae/specs/implement-dirty-topo/checklist.md
+.trae/specs/implement-dirty-topo/spec.md
+.trae/specs/implement-dirty-topo/tasks.md

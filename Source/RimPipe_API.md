@@ -1,11 +1,11 @@
-# RimPipe 下游说明（0.4.3）
+# RimPipe 下游说明
 
-给团队下游模组看的**唯一入口**：怎么挂依赖、本版能依赖什么、怎么用 XML / C# 扩展。  
+这篇文档给想依赖 RimPipe 的下游模组看：怎么挂依赖、本版能依赖什么、怎么用 XML / C# 扩展。  
 这不是 Steam 工坊公开包说明。
 
-**packageId：** `rimpipe.core` · **游戏：** RimWorld **1.6** · **框架版本：** **0.4.3** · **存档 schema：** **1**（玩法稳定面仍以 **0.4.0** 对内冻结为准）
+**packageId：** `rimpipe.core` · **游戏：** RimWorld **1.6** · **存档 schema：** **1**（玩法稳定面以 **0.4.0** 对内冻结为准）
 
-计划与决议细节仍以 `Source/RimPipe_TODO.md` 为准。
+计划与决议细节以 `Source/RimPipe_TODO.md` 为准。
 
 ---
 
@@ -22,20 +22,20 @@
 
 **已锁定：** 管道格**不储存流体**——量只在设备/管件的 `Container` 里。
 
-### 0.2 可依赖 vs 先别当真
+### 0.2 本版可依赖 vs 暂不建议依赖
 
-| 本版可依赖（0.4.x） | 延后 / 勿当稳定承诺 |
+| 本版可依赖（0.5.x） | 延后 / 勿当稳定承诺 |
 |--------------------|---------------------|
 | FluidDef；标准 NetworkMember / PipeCell / 阀·泵·换热器 / Reactor 的 XML Comp | Bridge-H（Harmony 强行注入、无引用也能挂） |
-| `IPipeInternalMappingContributor`（**只**登记同建筑内部 Mapping） | DirtyTopo（局部脏区拓扑） |
+| `IPipeInternalMappingContributor`（**只**登记同建筑内部 Mapping） | DirtyTopo（局部脏区重建，内部实现，非下游 API） |
 | `TrySetAmount` / `TryAddAmount` / `TrySetTemperature` | 通用「把直接相邻外部边改成 Forced」API |
 | `TrySetBreached` / `TryGetBreached`；伤害/Breakdown 自动破损 | 正式建造栏反应釜产品化、B0 混管 |
 | `TryRegisterChemReactor` 等；只读 Members / Mappings / ChemReactors / Sleep | 自有美术定稿；工坊 R2 包装 |
 | 存档 schema=1；跨建筑 Mapping 读档后重建 | 擅自改 DefName / 未公告就升 schema |
 
-多流体转化请用 **`PipeReactionDef` + 反应釜**，不要用成对 `MappingType.Chemical` 硬凑。
+多流体转化用 **`PipeReactionDef` + 反应釜**，不要用成对 `MappingType.Chemical` 硬凑。
 
-### 0.3 运行时必须带走的路径
+### 0.3 运行时需要带走的路径
 
 | 路径 | 用途 |
 |------|------|
@@ -63,6 +63,9 @@
 
 | 版本 | 要点 |
 |------|------|
+| **0.5.1** | 6.19 管道 A/B 双通道（方向分组、端口 channel、Gizmo 逐向配置）；6.18 流体物理量（粘度→流动阻力、比热→传热）。**无下游 API 变更**；schema 仍 1 |
+| **0.4.7** | DirtyTopo 局部脏区拓扑重建（放/拆管道不再整图重建）。**无下游 API 变更** |
+| **0.4.4–0.4.6** | 批级优化、休眠重评估单遍聚合、代码审查修复、批级缓存。**无下游 API 变更**；schema 仍 1 |
 | **0.4.3** | Debug：拓扑重建 Stopwatch（日志 `耗时=…ms`）+ Stress 一键场景 +「计时整图重建」；菜单 14 键。**无下游 API 变更**；不启动 DirtyTopo |
 | **0.4.2** | DevMode Overlay 性能：弃每帧 `FlashCell`，改 `CellRenderer` + 近距 OnGUI `P=`（内部调试绘制，不影响下游 API） |
 | **0.4.1** | Debug 菜单收成 12 键（7 工具 + 5 回归套件）；旧「断言* / 生成*」退出菜单；断言误报硬化。**勿依赖**旧 Debug 菜单项名称 |
@@ -72,7 +75,7 @@
 | 0.3.12–0.3.18 | ExtHook · 化学分批落地 |
 | 0.3.x 更早 | 泵/泄漏/阻力/压力/热量/散热/休眠/Overlay/存档迁移/研究本地化 |
 
-> 旧文档 `Source/RELEASE.md` 已并入本文，请只维护这一份。
+> 旧文档 `Source/RELEASE.md` 已并入本文，只需维护这一份。
 
 ---
 
@@ -96,7 +99,7 @@
 
 ---
 
-## 2. 核心模型（别另起一套抽象）
+## 2. 核心模型（沿用这套抽象）
 
 | 层级 | 类型 | 职责 |
 |------|------|------|
@@ -104,7 +107,7 @@
 | 对接 | `Port` | 本地朝向 → 世界朝向 → 外面那一格；**不算**流量 |
 | 传输 | `Mapping` | 容器↔容器；`maxFlowRate` = 每 20-tick 一批的上限 |
 
-**不要**再发明 `Node` / `Connection` / `PipeLine` 这类名字。  
+不要再新增 `Node` / `Connection` / `PipeLine` 这类命名。  
 **已锁定：** 管道格**不储存流体**——只管拓扑和破损标记。  
 **化学：** 多流体转化走 **`PipeReactionDef` + `CompPipeReactor`（或 `TryRegisterChemReactor`）**，不要用成对 `MappingType.Chemical` 模拟多入多出。
 
@@ -133,10 +136,10 @@
 
 ### 3.2 储罐类（NetworkMember + 可选破损）
 
-照抄 `Defs/Things/PipeBuildings.xml` 里的 `RimPipe_StorageTank`：
+参考 `Defs/Things/PipeBuildings.xml` 里的 `RimPipe_StorageTank`：
 
 - `CompProperties_PipeNetworkMember`：`containers` / `ports`（`localRot` + `containerIndex`）/ `defaultMaxFlowRate` / `insulation`
-- 管道必须铺在端口朝向的**邻格**（外一格）
+- 管道铺在端口朝向的**邻格**（外一格）
 - 叠放：挂 `PlaceWorker_RimPipeAppliance`（不能叠在管道上）
 - 破损（可选）：挂 `CompProperties_PipeBreachable`  
   Props 可调：`breachBelowHitPointsPercent`（默认 0.5）、`clearBreachOnRepaired`、`breachOnBreakdown`
@@ -173,7 +176,7 @@ public class CompMyBridge : ThingComp, IPipeInternalMappingContributor
 XML：双腔 `CompProperties_PipeNetworkMember` + 你自己的 CompProps（`compClass` 指向实现了接口的 Comp）。  
 重建时会扫 `parent.AllComps`；同一建筑可以有多个贡献者。
 
-**本版不承诺：** 通用的「把直接相邻外部边改成 Forced」API。泵自己的那套 Forced 贴邻逻辑仍写在 `CompPipePump` 里面。
+**本版不提供：** 通用的「把直接相邻外部边改成 Forced」API。泵自己的那套 Forced 贴邻逻辑仍写在 `CompPipePump` 里面。
 
 ### 3.6 化学反应
 
@@ -234,7 +237,7 @@ net.TrySetTemperature(container, 40f);  // 改温并唤醒
 ```
 
 - `Container.CommitAmount` / `CommitTemperature` 是 **`internal`**，第三方程序集**不能**直接调。
-- 正式逻辑别用 `DebugFillContainer`（那只是 Debug 薄包装）。
+- 业务逻辑不要用 `DebugFillContainer`（那只是 Debug 薄包装）。
 - 突然改量会打断休眠；API 内部已经会 `WakeContainer`。
 
 ### 4.2 破损桥接（Bridge）
@@ -252,7 +255,7 @@ net.TryGetBreached(thing, out bool breached);
 | `BroadcastCompSignal("Breakdown")`（官方 `CompBreakdownable`） | → `breached=true`（看 Props.`breachOnBreakdown`） |
 | 满血且当前没有 BrokenDown | MapComp 大约每 250 tick 清一次 `breached`（看 Props.`clearBreachOnRepaired`） |
 
-消费模组必须**引用** `rimpipe.core`。本版**不**提供「没引用也能硬挂」的 Harmony 方案（Bridge-H 延后）。
+消费模组需要**引用** `rimpipe.core`。本版**不**提供「没引用也能硬挂」的 Harmony 方案（Bridge-H 延后）。
 
 ### 4.3 其它常用入口
 
@@ -263,7 +266,7 @@ net.TryGetBreached(thing, out bool breached);
 
 ---
 
-## 5. 能力边界（本版 0.4.0）
+## 5. 能力边界（本版 0.5.1）
 
 | 可以做 | 不要做 |
 |--------|--------|
@@ -273,7 +276,7 @@ net.TryGetBreached(thing, out bool breached);
 | 读 Mappings / ChemReactors / 休眠态 | 通用「直接相邻外部 Forced」API |
 | 挂 Breachable / 阀 / 泵 / 换热器 / **Reactor** | 真混合物 Container / 混管反应（B0） |
 | `PipeReactionDef` + Reactor 或 `TryRegisterChemReactor` | 用二元 `MappingType.Chemical` 做多入多出 |
-| 实现 `IPipeInternalMappingContributor` 登记内部边 | 强迫产品必须带 CompBreakdownable；DirtyTopo |
+| 实现 `IPipeInternalMappingContributor` 登记内部边 | 强迫产品必须带 CompBreakdownable |
 
 存档 schema 细则见 `RimPipe_TODO.md` §7.5（SaveMig）。化学反应决议见 §6.17。破损桥接见 §7.8。
 
