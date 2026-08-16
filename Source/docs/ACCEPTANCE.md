@@ -344,20 +344,20 @@
 
 **状态：已游戏内确认通过：`R-全部 33/33`，存读档后再跑仍 33/33。**
 
-### 1.2ah DLL 可复现构建工程（CI 待验证）
+### 1.2ah DLL 可复现构建工程（已游戏+CI验证）
 
-> 处理代码审查中的 DLL 可复现性问题。
+> 处理代码审查中的 DLL 可复现性问题；已通过游戏内与 CI 验证。
 
 | 项 | 说明 |
 |----|------|
 | net48 自包含构建 | `RimPipe.csproj` 增加 `Microsoft.NETFramework.ReferenceAssemblies`，降低对 runner 预装 targeting pack 的依赖 |
 | CI deterministic 门禁 | 新增“Verify deterministic Release build”步骤：同一配置连续构建两次到不同目录，校验 DLL 哈希一致 |
-| CI DLL 漂移告警 | 新增“Warn on committed DLL drift”步骤：committed DLL 与 CI 构建产物不一致时输出 warning（不阻断） |
-| 本地校验 | 新增 `tools/check-committed-dll.ps1`，本地可检查 committed DLL 是否与当前源码构建一致 |
+| CI committed DLL 一致性门禁 | 新增“Verify committed DLL consistency”步骤：committed DLL 与 CI Release 构建不一致时直接失败 |
 | SDK 固定 | 新增 `global.json` 声明 SDK 基线 `8.0.100`；CI 固定安装该版本，本地可 `latestMajor` 回退 |
 | PDB 可复现性 | Release 配置 `DebugType=none` / `DebugSymbols=false`，避免 DLL 因输出路径/PDB 路径不同而产生字节差异 |
+| 本地校验 | 新增 `tools/check-committed-dll.ps1`，本地可检查 committed DLL 是否与当前源码构建一致 |
 
-**状态：代码/CI 已修改，`dotnet build` 0 警告 0 错误、30 个单元测试通过；CI deterministic 门禁待实际运行确认。**
+**状态：已通过游戏内回归与 CI 验证；committed DLL 一致性已设为 CI 硬门禁。**
 
 ### 1.2r 阶段四 · 4.8 Bridge-A 验收复查（Player.log · 2026-07-19）
 

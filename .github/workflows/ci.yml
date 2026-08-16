@@ -50,13 +50,15 @@ jobs:
             throw "Deterministic build check failed: same source produced different DLL bytes"
           }
 
-      - name: Warn on committed DLL drift
+      - name: Verify committed DLL consistency
         shell: pwsh
         run: |
           $committed = (Get-FileHash "Assemblies/RimPipe.dll").Hash
           $built = (Get-FileHash "$env:RUNNER_TEMP/rimpipe_a/RimPipe.dll").Hash
           if ($committed -ne $built) {
-            Write-Host "::warning title=DLL drift::Committed Assemblies/RimPipe.dll differs from CI build. Rebuild with tools/rebuild-dll.ps1 using the pinned SDK and commit separately."
+            Write-Host "committed=$committed"
+            Write-Host "built    =$built"
+            throw "Committed Assemblies/RimPipe.dll differs from CI Release build. Rebuild with tools/rebuild-dll.ps1 using the pinned SDK and commit separately."
           }
 
       - name: Run unit tests
