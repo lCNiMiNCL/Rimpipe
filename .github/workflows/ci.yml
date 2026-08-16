@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build RimPipe
+        run: dotnet build Source/RimPipe/RimPipe.csproj --configuration Debug -v:minimal
+
+      - name: Run unit tests
+        run: dotnet test Source/RimPipe.Tests/RimPipe.Tests.csproj --configuration Debug -v:minimal
+
+      - name: Validate XML / DefOf / localization
+        run: python tools/validate_config.py

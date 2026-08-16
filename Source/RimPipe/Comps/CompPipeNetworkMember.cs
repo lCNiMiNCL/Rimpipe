@@ -92,6 +92,31 @@ public class CompPipeNetworkMember : ThingComp
 				}
 				c.SyncPressureFromAmount();
 			}
+
+			// 4.4 旧档容器补齐：若旧存档容器数少于当前 Props，按 Props 追加默认容器。
+			// 这是 additive 迁移，不升 schema，也不改动已有容器数据。
+			if (Containers.Count < p.containers.Count)
+			{
+				for (int i = Containers.Count; i < p.containers.Count; i++)
+				{
+					PipeContainerProp cp = p.containers[i];
+					Container c = new Container
+					{
+						containerIndex = i,
+						capacity = cp.capacity,
+						amount = cp.initialAmount,
+						owner = this
+					};
+					if (!cp.fluidDefName.NullOrEmpty())
+					{
+						c.fluid = DefDatabase<FluidDef>.GetNamedSilentFail(cp.fluidDefName);
+					}
+					c.SyncPressureFromAmount();
+					Containers.Add(c);
+					Log.Warning(
+						$"[RimPipe] 读档补齐容器 {parent?.LabelCap} 容器[{i}]（Props 新增，按默认值初始化）。");
+				}
+			}
 		}
 
 		Ports.Clear();

@@ -154,6 +154,86 @@
 
 **总判：Overlay 性能修复验收通过**；Tick 峰值已记录供 DirtyTopo / Benchmark 决策参考（§7.10）。
 
+### 1.2v 阶段 2 重构 partial 验收复查（Player.log + 玩家确认 · 2026-08-16）
+
+> 本轮验证 `MapComponent_PipeNetwork` 与 `RimPipeDebugAsserts` partial 拆分后的行为一致性。
+> Player.log：`C:\Users\12135\AppData\LocalLow\Ludeon Studios\RimWorld by Ludeon Studios\Player.log`
+
+| 项 | 结论 | 证据 / 备注 |
+|----|------|-------------|
+| R-框架 | ✅ | `R-框架：通过 9/9`；休眠进入/唤醒、对称、Bridge×3、泵逆均分、泵阻断、泵局部重建 |
+| R-物理 | ✅ | `R-物理：通过 7/7`；压力、阻力、破损泄漏、水无Filth、摧毁停漏、Filth、泄漏室温 |
+| R-热与环境 | ✅ | `R-热与环境：通过 6/6`；热量均分、热量阻断、混温、保温对比、空罐、环境散热 |
+| R-化学 | ✅ | `R-化学：通过 5/5`；釜 / L1 / 条件 / 反应热 / 阻断 |
+| R-扩展 | ✅ | `R-扩展：通过 2/2`；ExtHook、分网休眠 |
+| R-通道 | ✅ | `R-通道：通过 4/4`；双通道十字、方向断开恢复、粘度、比热 |
+| 存读档 | ✅ | `Loading game from file TestPipe with mods:` 后无 RimPipe Exception；玩家确认存读档正常 |
+| 无崩溃 / Exception | ✅ | 本段无 RimPipe Exception / Config error |
+
+**总判：阶段 2 partial 重构未引入崩溃与存读档问题；6 套回归全部通过。**
+
+### 1.2w 阶段 3 回归问题研究（Player.log · 2026-08-16）
+
+> 新一轮测试出现两类报错：`R-通道：通过 3/4` 与 `局部≈整图等价失败`。已定位并修复。
+
+| 问题 | 根因 | 修复 |
+|------|------|------|
+| R-通道 3/4：`粘度失败：基准 右增 0 vs 稠液 右增 27` | `AssertViscosity` 取“第一条匹配 Mapping”，可能命中 R-物理残留的旧 TestFuel 泄漏边（`leakOpen=true`），导致基准线不流动 | 改为选择最新且 `!leakOpen` 的 TestFuel/TestThick Mapping |
+| `局部≈整图等价失败` | `DebugVerifyLoopReconnect` 清理场景后未冲刷延迟动作；随后 `DebugVerifyLocalEqualsFull` 在快照 `before` 时拿到过期局部拓扑，与整图重建结果不等价 | `DebugVerifyLocalEqualsFull` 先 `ProcessDelayedActions()` 再快照；`DebugVerifyLoopReconnect` finally 清理后也冲刷一次 |
+
+**状态：已游戏内重跑确认通过。`R-通道：通过 4/4`，`局部≈整图等价通过`，`环路拆段回归通过`；`dotnet build` 0 警告 0 错误。**
+
+### 1.2x 开发者菜单打不开问题修复（Player.log · 2026-08-16）
+
+> 新增 `R-全部` 后，游戏内开发者菜单点击即报错：
+> `System.ArgumentException: method return type is incompatible`
+
+| 项 | 说明 |
+|----|------|
+| 根因 | `DebugAction` 标注的方法必须返回 `void`；上一版把 6 个 `[DebugAction]` 套件方法改成返回 `(passed, total)`，导致 `DebugTabMenu_Actions.GenerateCacheForMethod` 在生成菜单时抛异常，整个 Dev 菜单无法打开 |
+| 修复 | 保留 `[DebugAction]` 的套件方法为 `void`；把实际跑套件并返回汇总的逻辑移到 `RunFramework/RunPhysics/...` 等内部方法；`R-全部` 调用这些内部方法汇总总分 |
+
+**状态：已游戏内确认：开发者菜单可打开，6 个单套件存在，`R-全部` 可运行。**
+
+### 1.2y R-全部 31/33 问题修复（Player.log · 2026-08-16）
+
+> `R-全部` 可运行，但汇总为 `31/33`：
+> - `R-物理：通过 6/7`：`压力均分失败`，总量漂移 80.27
+> - `R-热与环境：通过 5/6`：`热量均分失败`，量漂移 53.52
+
+| 项 | 说明 |
+|----|------|
+| 根因 | `R-全部` 让所有套件使用同一个鼠标原点；前一套件残留的罐/管会与后一套件新生成的设备相邻并连通，导致压力/热量断言测到“非隔离场景”，出现额外质量交换 |
+| 修复 | `R-全部` 为每个套件分配不同 z 偏移（0 / 30 / 60 / 90 / 120 / 150），使各套件场景互不重叠；单个套件行为不变 |
+
+**状态：已游戏内确认：`R-全部：通过 33/33`。**
+
+### 1.2z AssertHeatBlocked 环境散热隔离修复（Player.log · 2026-08-16）
+
+> 单独运行 `R-热与环境` 仍出现：
+> `热量阻断失败：开=False heatRate=0 |ΔT|=60→58 drift=2（阈=0.5）`
+
+| 项 | 说明 |
+|----|------|
+| 根因 | `AssertHeatBlocked` 只验证换热器自身 `heatRate=0`，但没有排除 Amb-A 环境散热；室温 25°C 时两侧容器都向室温靠拢，导致 `|ΔT|` 在 10 批内从 60 降到 58 |
+| 修复 | 在 `AssertHeatBlocked` 内临时将 `mem.Props.maxAmbientHeatRate` 置 0，跑完 10 批后在 `finally` 恢复原值，从而只测“换热器是否阻断导热” |
+
+**状态：已游戏内确认：`热量阻断通过`，`R-热与环境：通过 6/6`。**
+
+> 备注：若测试地图上存在玩家自建物品/建筑阻挡了 Debug 场景的管道格，部分场景可能因“管道被挡”而出现假失败；在干净空地或远离已有管网的位置运行 `R-全部` 可稳定得到 33/33。
+
+### 1.2aa ChemSolver 接入纯核后化学条件失败修复（Player.log · 2026-08-16）
+
+> `ChemSolver` 接入 `ChemSolverCore` 后，`R-化学` 变为 4/5：
+> `化学条件失败：冷=False() 温转=True 低压=False()`
+
+| 项 | 说明 |
+|----|------|
+| 根因 | `PipeReactionDef.GetChemSpec()` 缓存了配方快照；但 `AssertChemP5aConditions` 会在运行时临时修改 `recipe.minTemperature` / `recipe.minPressure`，缓存导致 `ChemSolverCore` 读到旧门槛，无法返回 `cold` / `lowP` |
+| 修复 | 移除 `GetChemSpec()` 的缓存，每次调用按当前 `PipeReactionDef` 字段重建纯配方镜像，确保测试期临时修改立即生效 |
+
+**状态：已游戏内确认：`R-化学：通过 5/5`，`R-全部：通过 33/33`。**
+
 ### 1.2r 阶段四 · 4.8 Bridge-A 验收复查（Player.log · 2026-07-19）
 
 | 项 | 结论 | 证据 / 备注 |

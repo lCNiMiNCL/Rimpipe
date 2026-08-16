@@ -8,12 +8,9 @@ namespace RimPipe.Debug;
 /// <summary>验收套件：5 个 ToolMap，点击原点后按偏移生成场景并跑断言。</summary>
 public static class RimPipeDebugSuites
 {
-	[DebugAction("RimPipe", "R-框架", false, false, false, false, false, 0, false,
-		actionType = DebugActionType.ToolMap,
-		allowedGameStates = AllowedGameStates.PlayingOnMap)]
-	private static void SuiteFramework()
+	private static (int passed, int total) RunFramework(IntVec3 origin)
 	{
-		RunQuiet("R-框架", (map, net, origin) =>
+		return RunQuiet("R-框架", (map, net, origin) =>
 		{
 			int passed = 0;
 			int total = 0;
@@ -93,15 +90,12 @@ public static class RimPipeDebugSuites
 			}
 
 			return (passed, total);
-		});
+		}, origin);
 	}
 
-	[DebugAction("RimPipe", "R-物理", false, false, false, false, false, 0, false,
-		actionType = DebugActionType.ToolMap,
-		allowedGameStates = AllowedGameStates.PlayingOnMap)]
-	private static void SuitePhysics()
+	private static (int passed, int total) RunPhysics(IntVec3 origin)
 	{
-		RunQuiet("R-物理", (map, net, origin) =>
+		return RunQuiet("R-物理", (map, net, origin) =>
 		{
 			int passed = 0;
 			int total = 0;
@@ -150,15 +144,12 @@ public static class RimPipeDebugSuites
 			}
 
 			return (passed, total);
-		});
+		}, origin);
 	}
 
-	[DebugAction("RimPipe", "R-热与环境", false, false, false, false, false, 0, false,
-		actionType = DebugActionType.ToolMap,
-		allowedGameStates = AllowedGameStates.PlayingOnMap)]
-	private static void SuiteHeatAmbient()
+	private static (int passed, int total) RunHeatAmbient(IntVec3 origin)
 	{
-		RunQuiet("R-热与环境", (map, net, origin) =>
+		return RunQuiet("R-热与环境", (map, net, origin) =>
 		{
 			int passed = 0;
 			int total = 0;
@@ -200,15 +191,12 @@ public static class RimPipeDebugSuites
 			}
 
 			return (passed, total);
-		});
+		}, origin);
 	}
 
-	[DebugAction("RimPipe", "R-化学", false, false, false, false, false, 0, false,
-		actionType = DebugActionType.ToolMap,
-		allowedGameStates = AllowedGameStates.PlayingOnMap)]
-	private static void SuiteChem()
+	private static (int passed, int total) RunChem(IntVec3 origin)
 	{
-		RunQuiet("R-化学", (map, net, origin) =>
+		return RunQuiet("R-化学", (map, net, origin) =>
 		{
 			int passed = 0;
 			int total = 0;
@@ -241,15 +229,12 @@ public static class RimPipeDebugSuites
 			}
 
 			return (passed, total);
-		});
+		}, origin);
 	}
 
-	[DebugAction("RimPipe", "R-扩展", false, false, false, false, false, 0, false,
-		actionType = DebugActionType.ToolMap,
-		allowedGameStates = AllowedGameStates.PlayingOnMap)]
-	private static void SuiteExt()
+	private static (int passed, int total) RunExt(IntVec3 origin)
 	{
-		RunQuiet("R-扩展", (map, net, origin) =>
+		return RunQuiet("R-扩展", (map, net, origin) =>
 		{
 			int passed = 0;
 			int total = 0;
@@ -269,15 +254,12 @@ public static class RimPipeDebugSuites
 			}
 
 			return (passed, total);
-		});
+		}, origin);
 	}
 
-	[DebugAction("RimPipe", "R-通道", false, false, false, false, false, 0, false,
-		actionType = DebugActionType.ToolMap,
-		allowedGameStates = AllowedGameStates.PlayingOnMap)]
-	private static void SuiteChannel()
+	private static (int passed, int total) RunChannel(IntVec3 origin)
 	{
-		RunQuiet("R-通道", (map, net, origin) =>
+		return RunQuiet("R-通道", (map, net, origin) =>
 		{
 			int passed = 0;
 			int total = 0;
@@ -313,10 +295,62 @@ public static class RimPipeDebugSuites
 			}
 
 			return (passed, total);
-		});
+		}, origin);
 	}
 
-	private static void RunQuiet(string name, Func<Map, MapComponent_PipeNetwork, IntVec3, (int passed, int total)> body)
+
+	[DebugAction("RimPipe", "R-框架", false, false, false, false, false, 0, false,
+		actionType = DebugActionType.ToolMap,
+		allowedGameStates = AllowedGameStates.PlayingOnMap)]
+	private static void SuiteFramework()
+	{
+		RunFramework(UI.MouseCell());
+	}
+
+	[DebugAction("RimPipe", "R-物理", false, false, false, false, false, 0, false,
+		actionType = DebugActionType.ToolMap,
+		allowedGameStates = AllowedGameStates.PlayingOnMap)]
+	private static void SuitePhysics()
+	{
+		RunPhysics(UI.MouseCell());
+	}
+
+	[DebugAction("RimPipe", "R-热与环境", false, false, false, false, false, 0, false,
+		actionType = DebugActionType.ToolMap,
+		allowedGameStates = AllowedGameStates.PlayingOnMap)]
+	private static void SuiteHeatAmbient()
+	{
+		RunHeatAmbient(UI.MouseCell());
+	}
+
+	[DebugAction("RimPipe", "R-化学", false, false, false, false, false, 0, false,
+		actionType = DebugActionType.ToolMap,
+		allowedGameStates = AllowedGameStates.PlayingOnMap)]
+	private static void SuiteChem()
+	{
+		RunChem(UI.MouseCell());
+	}
+
+	[DebugAction("RimPipe", "R-扩展", false, false, false, false, false, 0, false,
+		actionType = DebugActionType.ToolMap,
+		allowedGameStates = AllowedGameStates.PlayingOnMap)]
+	private static void SuiteExt()
+	{
+		RunExt(UI.MouseCell());
+	}
+
+	[DebugAction("RimPipe", "R-通道", false, false, false, false, false, 0, false,
+		actionType = DebugActionType.ToolMap,
+		allowedGameStates = AllowedGameStates.PlayingOnMap)]
+	private static void SuiteChannel()
+	{
+		RunChannel(UI.MouseCell());
+	}
+
+	[DebugAction("RimPipe", "R-全部", false, false, false, false, false, 0, false,
+		actionType = DebugActionType.ToolMap,
+		allowedGameStates = AllowedGameStates.PlayingOnMap)]
+	private static void SuiteAll()
 	{
 		Map map = Find.CurrentMap;
 		MapComponent_PipeNetwork? net = map?.GetComponent<MapComponent_PipeNetwork>();
@@ -329,9 +363,45 @@ public static class RimPipeDebugSuites
 		MapComponent_PipeNetwork.QuietDebugLogs = true;
 		try
 		{
+			int passed = 0;
+			int total = 0;
+
+			(int p, int t) r;
+			r = RunFramework(origin); passed += r.p; total += r.t;
+			r = RunPhysics(origin + new IntVec3(0, 0, 30)); passed += r.p; total += r.t;
+			r = RunHeatAmbient(origin + new IntVec3(0, 0, 60)); passed += r.p; total += r.t;
+			r = RunChem(origin + new IntVec3(0, 0, 90)); passed += r.p; total += r.t;
+			r = RunExt(origin + new IntVec3(0, 0, 120)); passed += r.p; total += r.t;
+			r = RunChannel(origin + new IntVec3(0, 0, 150)); passed += r.p; total += r.t;
+
+			RimPipeDebugUtil.ReportSuite("R-全部", passed, total);
+			Messages.Message($"[RimPipe] R-全部：通过 {passed}/{total}", MessageTypeDefOf.TaskCompletion, historical: false);
+		}
+		finally
+		{
+			MapComponent_PipeNetwork.QuietDebugLogs = prevQuiet;
+		}
+	}
+
+	private static (int passed, int total) RunQuiet(
+		string name,
+		Func<Map, MapComponent_PipeNetwork, IntVec3, (int passed, int total)> body,
+		IntVec3 origin)
+	{
+		Map map = Find.CurrentMap;
+		MapComponent_PipeNetwork? net = map?.GetComponent<MapComponent_PipeNetwork>();
+		if (map == null || net == null)
+		{
+			return (0, 0);
+		}
+		bool prevQuiet = MapComponent_PipeNetwork.QuietDebugLogs;
+		MapComponent_PipeNetwork.QuietDebugLogs = true;
+		try
+		{
 			(int passed, int total) = body(map, net, origin);
 			RimPipeDebugUtil.ReportSuite(name, passed, total);
 			Messages.Message($"[RimPipe] {name}：通过 {passed}/{total}", MessageTypeDefOf.TaskCompletion, historical: false);
+			return (passed, total);
 		}
 		finally
 		{

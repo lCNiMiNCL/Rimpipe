@@ -237,7 +237,7 @@ net.TrySetTemperature(container, 40f);  // 改温并唤醒
 ```
 
 - `Container.CommitAmount` / `CommitTemperature` 是 **`internal`**，第三方程序集**不能**直接调。
-- 业务逻辑不要用 `DebugFillContainer`（那只是 Debug 薄包装）。
+- `DebugFillContainer` / `DebugForceOneBatch` 等 Debug 入口已降为 `internal`，下游模组不要依赖；业务逻辑请用 `TrySetAmount` / `TryAddAmount` / `TrySetTemperature`。
 - 突然改量会打断休眠；API 内部已经会 `WakeContainer`。
 
 ### 4.2 破损桥接（Bridge）

@@ -36,7 +36,19 @@
 - 以后要加新依赖，放在 `Libs/<包名>/` 下，并在 csproj 里用相对路径引用；不要写本机绝对路径。
 - `Private=False`，编译产物不会把依赖 DLL 再复制进输出目录。
 
+## 怎么跑单元测试与校验
+
+```bat
+dotnet test ..\RimPipe.Tests\RimPipe.Tests.csproj
+python ..\..\tools\validate_config.py
+```
+
+
+- 测试工程只链接 `Source/RimPipe/Core/Pure/` 下的纯逻辑源码，不依赖游戏 DLL。
+- CI 使用 `windows-latest`，依次执行：build RimPipe → dotnet test → XML/DefOf/本地化校验。
+
 ## 怎么编译
+
 
 任选一种即可：
 

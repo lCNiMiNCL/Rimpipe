@@ -1,15 +1,37 @@
 using System.Collections.Generic;
-using UnityEngine;
-using Verse;
 
 namespace RimPipe;
 
 /// <summary>
 /// 化学反应算量：按配方从入腔扣、给出腔加。
 /// 支持可调混合比 mixRatio 和效率 η；还能看入腔温度/压力够不够门槛，不够就本批不做。
+/// 数值公式已下沉到 <see cref="ChemSolverCore"/>，本类只做 Verse 类型适配。
 /// </summary>
 public static class ChemSolver
 {
+	private static ChemContainerState ToState(Container? c)
+	{
+		return new ChemContainerState(
+			c?.fluid?.defName,
+			c?.amount ?? 0f,
+			c?.capacity ?? 0f,
+			c?.temperature ?? 0f);
+	}
+
+	private static List<ChemContainerState> ToStates(IList<Container>? list)
+	{
+		var states = new List<ChemContainerState>(list?.Count ?? 0);
+		if (list == null)
+		{
+			return states;
+		}
+		for (int i = 0; i < list.Count; i++)
+		{
+			states.Add(ToState(list[i]));
+		}
+		return states;
+	}
+
 	/// <summary>解析条件监测腔（相对 inputs；&lt;0 → 第一入腔）。</summary>
 	public static Container? ResolveConditionContainer(PipeReactionDef reaction, IList<Container> inputs)
 	{
@@ -35,34 +57,12 @@ public static class ChemSolver
 		IList<Container> inputs,
 		out string? failReason)
 	{
-		failReason = null;
-		Container? cond = ResolveConditionContainer(reaction, inputs);
-		if (cond == null)
-		{
-			failReason = "condSlot";
-			return false;
-		}
-		if (cond.temperature < reaction.minTemperature)
-		{
-			failReason = "cold";
-			return false;
-		}
-		float p = Container.PressureFromAmount(cond.amount, cond.capacity);
-		if (p < reaction.minPressure)
-		{
-			failReason = "lowP";
-			return false;
-		}
-		return true;
+		return ChemSolverCore.PassesConditions(reaction.GetChemSpec(), ToStates(inputs), out failReason);
 	}
 
 	public static float ClampMixRatio(PipeReactionDef reaction, float mixRatio)
 	{
-		if (mixRatio <= 0f)
-		{
-			mixRatio = reaction.ResolvedBaseMixRatio;
-		}
-		return Mathf.Clamp(mixRatio, reaction.ratioMin, reaction.ratioMax);
+		return ChemSolverCore.ClampMixRatio(reaction.GetChemSpec(), mixRatio);
 	}
 
 	/// <summary>
@@ -70,38 +70,7 @@ public static class ChemSolver
 	/// </summary>
 	public static float ComputeEfficiency(PipeReactionDef reaction, float mixRatio)
 	{
-		float r = ClampMixRatio(reaction, mixRatio);
-		float stoich = reaction.StoichMixRatio;
-		float edge = reaction.efficiencyAtRatioEdge;
-		float peak = reaction.efficiencyAtStoich;
-		if (stoich <= FlowSolver.AmountEpsilon)
-		{
-			return peak;
-		}
-		if (Mathf.Abs(r - stoich) <= 1e-4f)
-		{
-			return peak;
-		}
-		if (r < stoich)
-		{
-			float span = stoich - reaction.ratioMin;
-			if (span <= FlowSolver.AmountEpsilon)
-			{
-				return edge;
-			}
-			float t = (r - reaction.ratioMin) / span;
-			return Mathf.Lerp(edge, peak, Mathf.Clamp01(t));
-		}
-		else
-		{
-			float span = reaction.ratioMax - stoich;
-			if (span <= FlowSolver.AmountEpsilon)
-			{
-				return edge;
-			}
-			float t = (r - stoich) / span;
-			return Mathf.Lerp(peak, edge, Mathf.Clamp01(t));
-		}
+		return ChemSolverCore.ComputeEfficiency(reaction.GetChemSpec(), mixRatio);
 	}
 
 	/// <summary>每 1 批单位各输入消耗量（已按 mixRatio）；失败返回 false。</summary>
@@ -111,32 +80,7 @@ public static class ChemSolver
 		List<float> intoPerBatch,
 		out string? failReason)
 	{
-		intoPerBatch.Clear();
-		failReason = null;
-		float r = ClampMixRatio(reaction, mixRatio);
-		if (!reaction.TryGetMixPairAmounts(out float oxStoich, out float fuelStoich))
-		{
-			failReason = "mixPair";
-			return false;
-		}
-		int oxIdx = reaction.mixRatioOxidizerInputIndex;
-		int fuelIdx = reaction.mixRatioFuelInputIndex;
-		for (int i = 0; i < reaction.inputs.Count; i++)
-		{
-			if (i == fuelIdx)
-			{
-				intoPerBatch.Add(fuelStoich);
-			}
-			else if (i == oxIdx)
-			{
-				intoPerBatch.Add(fuelStoich * r);
-			}
-			else
-			{
-				intoPerBatch.Add(reaction.inputs[i].stoichAmount);
-			}
-		}
-		return true;
+		return ChemSolverCore.TryGetInputPerBatch(reaction.GetChemSpec(), mixRatio, intoPerBatch, out failReason);
 	}
 
 	public static float ComputeBatchCount(
@@ -149,105 +93,21 @@ public static class ChemSolver
 		out string? failReason,
 		List<float>? perInOut = null)
 	{
-		efficiency = 1f;
-		failReason = null;
-		if (!enabled)
-		{
-			failReason = "disabled";
-			return 0f;
-		}
 		if (reaction == null)
 		{
+			efficiency = 1f;
 			failReason = "noReaction";
 			return 0f;
 		}
-		if (inputs == null || outputs == null
-			|| inputs.Count != reaction.inputs.Count
-			|| outputs.Count != reaction.outputs.Count)
-		{
-			failReason = "slotMismatch";
-			return 0f;
-		}
-		if (!PassesConditions(reaction, inputs, out failReason))
-		{
-			return 0f;
-		}
-
-		// 传入 perInOut 则复用（批处理路径传 MapComp 的 scratch），避免每次调用分配列表
-		List<float> perIn = perInOut ?? new List<float>();
-		if (!TryGetInputPerBatch(reaction, mixRatio, perIn, out failReason))
-		{
-			return 0f;
-		}
-		efficiency = ComputeEfficiency(reaction, mixRatio);
-
-		float n = reaction.maxRate;
-		if (n <= FlowSolver.AmountEpsilon)
-		{
-			failReason = "maxRate";
-			return 0f;
-		}
-
-		for (int i = 0; i < reaction.inputs.Count; i++)
-		{
-			Container c = inputs[i];
-			PipeReactionFluidAmount row = reaction.inputs[i];
-			if (row?.fluid == null || c == null)
-			{
-				failReason = $"input[{i}]null";
-				return 0f;
-			}
-			if (c.fluid != row.fluid)
-			{
-				failReason = $"input[{i}]fluid";
-				return 0f;
-			}
-			float need = perIn[i];
-			if (need <= FlowSolver.AmountEpsilon)
-			{
-				failReason = $"input[{i}]stoich";
-				return 0f;
-			}
-			float byAmt = c.amount / need;
-			if (byAmt < n)
-			{
-				n = byAmt;
-			}
-		}
-
-		for (int i = 0; i < reaction.outputs.Count; i++)
-		{
-			PipeReactionFluidAmount row = reaction.outputs[i];
-			Container c = outputs[i];
-			if (row?.fluid == null || c == null)
-			{
-				failReason = $"output[{i}]null";
-				return 0f;
-			}
-			if (c.amount > FlowSolver.AmountEpsilon && c.fluid != row.fluid)
-			{
-				failReason = $"output[{i}]fluid";
-				return 0f;
-			}
-			float produced = row.stoichAmount * efficiency;
-			if (produced <= FlowSolver.AmountEpsilon)
-			{
-				failReason = $"output[{i}]stoich";
-				return 0f;
-			}
-			float byFree = c.FreeCapacity / produced;
-			if (byFree < n)
-			{
-				n = byFree;
-			}
-		}
-
-		if (n <= FlowSolver.AmountEpsilon)
-		{
-			failReason = "n≈0";
-			return 0f;
-		}
-		return n;
+		return ChemSolverCore.ComputeBatchCount(
+			reaction.GetChemSpec(),
+			ToStates(inputs),
+			ToStates(outputs),
+			enabled,
+			mixRatio,
+			out efficiency,
+			out failReason,
+			perInOut);
 	}
 
 	/// <summary>兼容：用配方默认 mix，忽略效率细节调用方。</summary>
@@ -273,31 +133,35 @@ public static class ChemSolver
 		List<float>? precomputedPerIn = null)
 	{
 		into.Clear();
-		if (n <= FlowSolver.AmountEpsilon)
+		if (n <= FlowSolverCore.AmountEpsilon)
 		{
 			return;
 		}
-		// 批处理路径已由 ComputeBatchCount 算好 perIn，直接复用避免同批双算
-		List<float> perIn;
-		if (precomputedPerIn != null)
+
+		var pureDeltas = new List<(int Index, float Delta)>();
+		ChemSolverCore.BuildAmountDeltas(
+			reaction.GetChemSpec(),
+			ToStates(inputs),
+			ToStates(outputs),
+			n,
+			mixRatio,
+			efficiency,
+			pureDeltas,
+			precomputedPerIn);
+
+		for (int i = 0; i < pureDeltas.Count; i++)
 		{
-			perIn = precomputedPerIn;
-		}
-		else
-		{
-			perIn = new List<float>();
-			if (!TryGetInputPerBatch(reaction, mixRatio, perIn, out _))
+			int index = pureDeltas[i].Index;
+			float delta = pureDeltas[i].Delta;
+			if (index < inputs.Count)
 			{
-				return;
+				into.Add((inputs[index], delta));
 			}
-		}
-		for (int i = 0; i < reaction.inputs.Count; i++)
-		{
-			into.Add((inputs[i], -n * perIn[i]));
-		}
-		for (int i = 0; i < reaction.outputs.Count; i++)
-		{
-			into.Add((outputs[i], n * reaction.outputs[i].stoichAmount * efficiency));
+			else
+			{
+				int outIndex = index - inputs.Count;
+				into.Add((outputs[outIndex], delta));
+			}
 		}
 	}
 }

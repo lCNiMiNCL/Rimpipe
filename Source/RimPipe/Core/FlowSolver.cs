@@ -11,10 +11,11 @@ namespace RimPipe;
 ///   泄漏扣量不走这里（破口=大气孔，不吃粘度）。
 /// 边不完整或 leakOpen → want=0（泄漏放到 Commit 里扣）；两边流体种类不同 → want=0 并打日志。
 /// 批内欠松弛可以用「虚拟量」试算；压力必须跟着虚拟量当场重算。
+/// 数值公式已下沉到 <see cref="FlowSolverCore"/>，本类只保留 Verse 类型适配与日志。
 /// </summary>
 public static class FlowSolver
 {
-	public const float AmountEpsilon = 1e-4f;
+	public const float AmountEpsilon = FlowSolverCore.AmountEpsilon;
 
 	public static float ComputeWant(Mapping mapping, out Container? source, out Container? target, out bool isLeak)
 	{
@@ -89,24 +90,14 @@ public static class FlowSolver
 		Container dst = mapping.forcedFromA ? b : a;
 		float amountSrc = mapping.forcedFromA ? amountA : amountB;
 		float amountDst = mapping.forcedFromA ? amountB : amountA;
-		float freeDst = dst.capacity - amountDst;
 
-		if (amountSrc < AmountEpsilon || freeDst < AmountEpsilon)
-		{
-			return 0f;
-		}
-
-		// 泵也吃粘度：高粘流体同样压不动（与 Equalize 一致的 rateCap）
-		float want = mapping.maxFlowRate / viscosity;
-		if (want > amountSrc)
-		{
-			want = amountSrc;
-		}
-		if (want > freeDst)
-		{
-			want = freeDst;
-		}
-		if (want < AmountEpsilon)
+		float want = FlowSolverCore.ComputeForcedWant(
+			amountSrc,
+			amountDst,
+			dst.capacity,
+			mapping.maxFlowRate,
+			viscosity);
+		if (want <= FlowSolverCore.AmountEpsilon)
 		{
 			return 0f;
 		}
@@ -129,15 +120,13 @@ public static class FlowSolver
 		source = null;
 		target = null;
 
-		float pA = Container.PressureFromAmount(amountA, a.capacity);
-		float pB = Container.PressureFromAmount(amountB, b.capacity);
+		float pA = FlowSolverCore.PressureFromAmount(amountA, a.capacity);
+		float pB = FlowSolverCore.PressureFromAmount(amountB, b.capacity);
 
 		Container hi;
 		Container lo;
 		float amountHi;
-		float freeLo;
-		float pHi;
-		float pLo;
+		float amountLo;
 		float capHi;
 		float capLo;
 		if (pA > pB + AmountEpsilon)
@@ -145,9 +134,7 @@ public static class FlowSolver
 			hi = a;
 			lo = b;
 			amountHi = amountA;
-			freeLo = b.capacity - amountB;
-			pHi = pA;
-			pLo = pB;
+			amountLo = amountB;
 			capHi = a.capacity;
 			capLo = b.capacity;
 		}
@@ -156,9 +143,7 @@ public static class FlowSolver
 			hi = b;
 			lo = a;
 			amountHi = amountB;
-			freeLo = a.capacity - amountA;
-			pHi = pB;
-			pLo = pA;
+			amountLo = amountA;
 			capHi = b.capacity;
 			capLo = a.capacity;
 		}
@@ -167,28 +152,14 @@ public static class FlowSolver
 			return 0f;
 		}
 
-		if (freeLo < AmountEpsilon)
-		{
-			return 0f;
-		}
-
-		float minCap = capHi < capLo ? capHi : capLo;
-		float drive = (pHi - pLo) / 2f * minCap;
-		float want = drive;
-		float rateCap = mapping.maxFlowRate / viscosity;
-		if (want > rateCap)
-		{
-			want = rateCap;
-		}
-		if (want > amountHi)
-		{
-			want = amountHi;
-		}
-		if (want > freeLo)
-		{
-			want = freeLo;
-		}
-		if (want < AmountEpsilon)
+		float want = FlowSolverCore.ComputeEqualizeWant(
+			amountHi,
+			amountLo,
+			capHi,
+			capLo,
+			mapping.maxFlowRate,
+			viscosity);
+		if (want <= FlowSolverCore.AmountEpsilon)
 		{
 			return 0f;
 		}

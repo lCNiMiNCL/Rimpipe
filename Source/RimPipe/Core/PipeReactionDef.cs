@@ -60,6 +60,48 @@ public class PipeReactionDef : Def
 
 	public bool requirePower = true;
 
+
+	/// <summary>返回纯 C# 配方镜像，供 <see cref="ChemSolver"/> 与单元测试复用。每次调用按当前字段重建，避免运行时修改配方门槛后读到旧快照。</summary>
+	internal ChemReactionSpec GetChemSpec()
+	{
+		var spec = new ChemReactionSpec
+		{
+			InputFluids = new string?[inputs?.Count ?? 0],
+			InputStoich = new float[inputs?.Count ?? 0],
+			OutputFluids = new string?[outputs?.Count ?? 0],
+			OutputStoich = new float[outputs?.Count ?? 0],
+			MaxRate = maxRate,
+			BaseMixRatio = baseMixRatio,
+			RatioMin = ratioMin,
+			RatioMax = ratioMax,
+			MixRatioOxidizerInputIndex = mixRatioOxidizerInputIndex,
+			MixRatioFuelInputIndex = mixRatioFuelInputIndex,
+			ConditionContainerIndex = conditionContainerIndex,
+			EfficiencyAtStoich = efficiencyAtStoich,
+			EfficiencyAtRatioEdge = efficiencyAtRatioEdge,
+			MinTemperature = minTemperature,
+			MinPressure = minPressure,
+			HeatPerBatch = heatPerBatch
+		};
+		if (inputs != null)
+		{
+			for (int i = 0; i < inputs.Count; i++)
+			{
+				spec.InputFluids[i] = inputs[i]?.fluid?.defName;
+				spec.InputStoich[i] = inputs[i]?.stoichAmount ?? 0f;
+			}
+		}
+		if (outputs != null)
+		{
+			for (int i = 0; i < outputs.Count; i++)
+			{
+				spec.OutputFluids[i] = outputs[i]?.fluid?.defName;
+				spec.OutputStoich[i] = outputs[i]?.stoichAmount ?? 0f;
+			}
+		}
+		return spec;
+	}
+
 	/// <summary>解析后的默认 mixRatio（氧化剂/燃料）。</summary>
 	public float ResolvedBaseMixRatio
 	{
