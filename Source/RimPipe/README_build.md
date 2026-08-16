@@ -47,6 +47,11 @@ python ..\..\tools\validate_config.py
 - 测试工程只链接 `Source/RimPipe/Core/Pure/` 下的纯逻辑源码，不依赖游戏 DLL。
 - CI 使用 `windows-latest`，依次执行：build RimPipe → dotnet test → XML/DefOf/本地化校验。
 
+## SDK 固定
+
+仓库根目录 `global.json` 声明 SDK 基线为 `8.0.100`，并允许 `latestMajor` 回退到本机已安装的新版 SDK。
+CI 固定安装 `8.0.100`；本地若没有该版本，会自动使用已安装的最新 SDK。
+
 ## DLL 提交约定
 
 - 代码提交不要混入 DLL；DLL 由单独提交承载。
