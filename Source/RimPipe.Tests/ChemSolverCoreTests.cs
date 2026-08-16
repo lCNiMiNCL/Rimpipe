@@ -189,4 +189,36 @@ public class ChemSolverCoreTests
 		Assert.Equal((1, -5f * 1f), deltas[1]);
 		Assert.Equal((2, 5f * 3.3f), deltas[2]);
 	}
+
+	[Fact]
+	public void ComputeBatchCount_NegativeInputAmountReturnsZero()
+	{
+		var rx = CreateLoxRp1();
+		float n = ChemSolverCore.ComputeBatchCount(rx, Inputs(lox: -1f, rp1: 100f), Outputs(), true, 2.3f, out _, out string? reason);
+		Assert.Equal(0f, n);
+		Assert.Equal("input[0]amount", reason);
+	}
+
+	[Fact]
+	public void ComputeBatchCount_NanInputAmountReturnsZero()
+	{
+		var rx = CreateLoxRp1();
+		float n = ChemSolverCore.ComputeBatchCount(rx, Inputs(lox: float.NaN, rp1: 100f), Outputs(), true, 2.3f, out _, out string? reason);
+		Assert.Equal(0f, n);
+		Assert.Equal("input[0]amount", reason);
+	}
+
+	[Fact]
+	public void ComputeBatchCount_NegativeOrNanOutputAmountReturnsZero()
+	{
+		var rx = CreateLoxRp1();
+		float nNeg = ChemSolverCore.ComputeBatchCount(rx, Inputs(), Outputs(exhaust: -1f), true, 2.3f, out _, out string? reasonNeg);
+		Assert.Equal(0f, nNeg);
+		Assert.Equal("output[0]amount", reasonNeg);
+
+		float nNan = ChemSolverCore.ComputeBatchCount(rx, Inputs(), Outputs(exhaust: float.NaN), true, 2.3f, out _, out string? reasonNan);
+		Assert.Equal(0f, nNan);
+		Assert.Equal("output[0]amount", reasonNan);
+	}
+
 }

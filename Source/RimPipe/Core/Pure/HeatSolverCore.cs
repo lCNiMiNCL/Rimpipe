@@ -17,6 +17,13 @@ public static class HeatSolverCore
 		float specificHeatB,
 		float maxHeatRate)
 	{
+		if (float.IsNaN(amountA) || float.IsNaN(amountB)
+			|| float.IsNaN(tempA) || float.IsNaN(tempB)
+			|| float.IsNaN(specificHeatA) || float.IsNaN(specificHeatB)
+			|| float.IsNaN(maxHeatRate))
+		{
+			return 0f;
+		}
 		if (amountA <= FlowSolverCore.AmountEpsilon || amountB <= FlowSolverCore.AmountEpsilon)
 		{
 			return 0f;

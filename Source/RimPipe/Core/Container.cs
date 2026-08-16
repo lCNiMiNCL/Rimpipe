@@ -54,6 +54,11 @@ public class Container : IExposable
 	/// <summary>真正改 amount。只有 MapComponent_PipeNetwork.CommitDeltas 可以调用。</summary>
 	internal void CommitAmount(float newAmount)
 	{
+		if (float.IsNaN(newAmount))
+		{
+			Log.Warning($"[RimPipe] Container {id} 提交 NaN 量，钳制为 0。");
+			newAmount = 0f;
+		}
 		if (newAmount < -0.0001f)
 		{
 			Log.Warning($"[RimPipe] Container {id} 提交负量 {newAmount}，钳制为 0。");

@@ -258,6 +258,24 @@ public static class ChemSolverCore
 			failReason = "slotMismatch";
 			return 0f;
 		}
+		for (int i = 0; i < inputs.Count; i++)
+		{
+			ChemContainerState c = inputs[i];
+			if (float.IsNaN(c.Amount) || float.IsNaN(c.Capacity) || c.Amount < 0f)
+			{
+				failReason = $"input[{i}]amount";
+				return 0f;
+			}
+		}
+		for (int i = 0; i < outputs.Count; i++)
+		{
+			ChemContainerState c = outputs[i];
+			if (float.IsNaN(c.Amount) || float.IsNaN(c.Capacity) || c.Amount < 0f)
+			{
+				failReason = $"output[{i}]amount";
+				return 0f;
+			}
+		}
 		if (!PassesConditions(reaction, inputs, out failReason))
 		{
 			return 0f;

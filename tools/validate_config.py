@@ -3,6 +3,7 @@
 - all Defs XML well-formed
 - every RimPipeDefOf field has a matching defName in Defs
 - ChineseSimplified and English Keyed key sets are identical
+- DefInjected tags are well-formed, reference existing DefNames, and are consistent across languages that ship DefInjected
 """
 import re
 import sys
@@ -72,11 +73,18 @@ def main():
             fail(f"Keyed mismatch for {lang}: missing={only_a} extra={only_b}")
 
     # 4. DefInjected XML well-formed + tag 指向的 DefName 必须存在于 Defs
-    for definjected_path in sorted(langs_dir.rglob("DefInjected/*.xml")):
+    #    + 跨语言 DefInjected tag 集合一致（只比较实际提供 DefInjected 的语言，
+    #      简中当前以 Defs 中文为基线，可没有 DefInjected 目录）。
+    definjected_sets = {}
+    for definjected_path in sorted(
+            xml_path for xml_path in langs_dir.rglob("*.xml") if "DefInjected" in xml_path.parts):
         try:
             tree = ET.parse(definjected_path)
         except ET.ParseError as e:
             fail(f"{definjected_path.relative_to(ROOT)}: XML parse error: {e}")
+        # 路径形如 Languages/<lang>/DefInjected/<DefType>/<file>.xml
+        lang = definjected_path.parent.parent.parent.name
+        keys = definjected_sets.setdefault(lang, set())
         for child in tree.getroot():
             tag = child.tag
             if "." not in tag:
@@ -84,9 +92,22 @@ def main():
             def_name = tag.split(".", 1)[0]
             if def_name not in def_names:
                 fail(f"{definjected_path.relative_to(ROOT)}: DefInjected tag '{tag}' references missing DefName '{def_name}'")
+            keys.add(tag)
+
+    definjected_base = None
+    for lang in sorted(definjected_sets):
+        keys = definjected_sets[lang]
+        if definjected_base is None:
+            definjected_base = keys
+        elif definjected_base != keys:
+            only_a = sorted(definjected_base - keys)
+            only_b = sorted(keys - definjected_base)
+            fail(f"DefInjected mismatch for {lang}: missing={only_a} extra={only_b}")
 
     print(f"OK: {len(def_names)} defs, {len(fields)} DefOf fields, "
-          f"{len(base) if base else 0} Keyed keys, XML/DefOf/Keyed/DefInjected checks passed.")
+          f"{len(base) if base else 0} Keyed keys, "
+          f"{len(definjected_base) if definjected_base else 0} DefInjected tags across {len(definjected_sets)} lang(s), "
+          f"XML/DefOf/Keyed/DefInjected checks passed.")
 
 if __name__ == "__main__":
     main()

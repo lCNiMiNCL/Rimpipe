@@ -51,4 +51,22 @@ public class HeatSolverCoreTests
 		float q = HeatSolverCore.ComputeHeatWant(50f, 50f, 80f, 20f, 1f, 1f, 10f);
 		AssertClose(10f, q);
 	}
+
+	[Fact]
+	public void HeatWant_NegativeOrNanAmountReturnsZero()
+	{
+		AssertClose(0f, HeatSolverCore.ComputeHeatWant(-5f, 50f, 80f, 20f, 1f, 1f, 1_000f));
+		AssertClose(0f, HeatSolverCore.ComputeHeatWant(50f, -5f, 80f, 20f, 1f, 1f, 1_000f));
+		AssertClose(0f, HeatSolverCore.ComputeHeatWant(float.NaN, 50f, 80f, 20f, 1f, 1f, 1_000f));
+		AssertClose(0f, HeatSolverCore.ComputeHeatWant(50f, float.NaN, 80f, 20f, 1f, 1f, 1_000f));
+	}
+
+	[Fact]
+	public void HeatWant_NanParametersReturnZero()
+	{
+		AssertClose(0f, HeatSolverCore.ComputeHeatWant(50f, 50f, float.NaN, 20f, 1f, 1f, 1_000f));
+		AssertClose(0f, HeatSolverCore.ComputeHeatWant(50f, 50f, 80f, 20f, float.NaN, 1f, 1_000f));
+		AssertClose(0f, HeatSolverCore.ComputeHeatWant(50f, 50f, 80f, 20f, 1f, 1f, float.NaN));
+	}
+
 }

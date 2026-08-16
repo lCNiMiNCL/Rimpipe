@@ -29,6 +29,7 @@ public partial class MapComponent_PipeNetwork : MapComponent
 	private readonly HashSet<(Container, Container)> scratchRecovered = new HashSet<(Container, Container)>();
 	private readonly HashSet<Container> scratchSeedContainers = new HashSet<Container>();
 	private readonly List<HashSet<Container>> scratchNetDomains = new List<HashSet<Container>>();
+	private readonly List<HashSet<Container>> scratchNetDomainPool = new List<HashSet<Container>>();
 	private readonly HashSet<Container> scratchNetVisited = new HashSet<Container>();
 	private readonly Queue<Container> scratchNetQueue = new Queue<Container>();
 	private readonly HashSet<int> scratchNetUsedThisPass = new HashSet<int>();
@@ -1069,6 +1070,19 @@ public partial class MapComponent_PipeNetwork : MapComponent
 		}
 	}
 
+	private HashSet<Container> GetScratchNetDomain()
+	{
+		if (scratchNetDomainPool.Count > 0)
+		{
+			int last = scratchNetDomainPool.Count - 1;
+			HashSet<Container> domain = scratchNetDomainPool[last];
+			scratchNetDomainPool.RemoveAt(last);
+			domain.Clear();
+			return domain;
+		}
+		return new HashSet<Container>();
+	}
+
 	/// <summary>
 	/// netId 增量：只对受影响 seed 容器所在的连通域重打 id（允许空洞，不压缩），
 	/// 未受影响容器的 netId / sleepStates 完全不动；受影响域一律 Wake。
@@ -1086,7 +1100,7 @@ public partial class MapComponent_PipeNetwork : MapComponent
 			{
 				continue;
 			}
-			HashSet<Container> domain = new HashSet<Container>();
+			HashSet<Container> domain = GetScratchNetDomain();
 			Queue<Container> q = scratchNetQueue;
 			scratchNetQueue.Clear();
 			q.Enqueue(seed);
@@ -1179,6 +1193,15 @@ public partial class MapComponent_PipeNetwork : MapComponent
 				m.netId = m.containerB.netId;
 			}
 		}
+
+		// 4) 归还域 HashSet 到池中，避免每次增量重建产生新分配
+		for (int d = 0; d < domains.Count; d++)
+		{
+			HashSet<Container> domain = domains[d];
+			domain.Clear();
+			scratchNetDomainPool.Add(domain);
+		}
+		domains.Clear();
 	}
 
 	/// <summary>

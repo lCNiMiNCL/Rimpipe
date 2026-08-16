@@ -242,6 +242,7 @@
 
 ### 1.2aa ChemSolver 接入纯核后化学条件失败修复（Player.log · 2026-08-16）
 
+> 加载 DLL：0.5.1
 > `ChemSolver` 接入 `ChemSolverCore` 后，`R-化学` 变为 4/5：
 > `化学条件失败：冷=False() 温转=True 低压=False()`
 
@@ -254,6 +255,7 @@
 
 ### 1.2ab 阶段 4 · 4.1/4.2 破损局部化与精确唤醒实现（已游戏验证）
 
+> 加载 DLL：0.5.1
 > 实现记录，已通过游戏内回归验证。
 
 | 项 | 说明 |
@@ -266,6 +268,7 @@
 
 ### 1.2ac 阶段 4 · 4.3 下标保护统一实现（已游戏验证）
 
+> 加载 DLL：0.5.1
 > 实现记录，已通过游戏内回归验证。
 
 | 项 | 说明 |
@@ -279,6 +282,7 @@
 
 ### 1.2ad 存读档后 R-通道 3/4 修复（已游戏验证）
 
+> 加载 DLL：0.5.1
 > 4.3 验证中，存读档后再次运行出现：
 > `双通道十字失败：EW=True NS=False ...`
 
@@ -291,6 +295,7 @@
 
 ### 1.2ae 阶段 4 · 4.5 拓扑重建分配优化实现（已游戏验证）
 
+> 加载 DLL：0.5.1
 > 实现记录，已通过游戏内回归验证。
 
 | 项 | 说明 |
@@ -304,6 +309,7 @@
 
 ### 1.2af 代码审查后自检修复（已游戏验证）
 
+> 加载 DLL：0.5.1
 > 根据外部 code review 结果进行自检后修复，已通过游戏内回归验证。
 
 | 项 | 说明 |
@@ -322,6 +328,7 @@
 
 ### 1.2ag 第二轮自检优化（已游戏验证）
 
+> 加载 DLL：0.5.1
 > 继续处理代码审查遗留项，已通过游戏内回归验证。
 
 | 项 | 说明 |
@@ -334,6 +341,7 @@
 
 ### 1.2ai 第三轮代码优化（已游戏验证）
 
+> 加载 DLL：0.5.1
 > 继续减少热路径分配，并提升化学批处理效率；已通过游戏内回归验证。
 
 | 项 | 说明 |
@@ -346,6 +354,7 @@
 
 ### 1.2ah DLL 可复现构建工程（已游戏+CI验证）
 
+> 加载 DLL：0.5.1
 > 处理代码审查中的 DLL 可复现性问题；已通过游戏内与 CI 验证。
 
 | 项 | 说明 |
@@ -361,6 +370,7 @@
 
 ### 1.2aj 二次审查 CI/DLL 门禁修复（已本地+CI验证）
 
+> 加载 DLL：0.5.1
 > 针对二次审查指出的 CI committed DLL 伪阳性与 deterministic 验证可靠性问题。
 
 | 项 | 说明 |
@@ -371,6 +381,22 @@
 | 本地脚本 | `verify-deterministic.ps1` 同步改为 `-t:Rebuild` |
 
 **状态：已通过本地与 CI 验证：`Verify deterministic Release build` 通过，`Verify committed DLL consistency` 通过。**
+
+### 1.2ak 第四轮自检优化验收（Player.log · 2026-08-17）
+
+> 加载 DLL：0.5.1
+> Player.log：`C:\Users\12135\AppData\LocalLow\Ludeon Studios\RimWorld by Ludeon Studios\Player.log`
+> 本轮覆盖：DefInjected 跨语言集合校验、`ReassignNetworkIdsIncremental` domain HashSet 池化、NaN/负数 amount 边界防护与单测、ACCEPTANCE 版本锚点补充。
+
+| 项 | 结论 | 证据 / 备注 |
+|----|------|-------------|
+| 新游戏 R-全部 | ✅ | `R-全部：通过 33/33`；框架 9/9、物理 7/7、热与环境 6/6、化学 5/5、扩展 2/2、通道 4/4 |
+| 读档后 R-全部 | ✅ | `Loading game from file TestPipe` 后再次 `R-全部：通过 33/33` |
+| 存读档 | ✅ | 读档后成员注册与拓扑重建正常，无 RimPipe Exception |
+| 无崩溃 / Exception | ✅ | 本段无 Exception / Config error / `RimPipe…失败` / NaN / 负量日志 |
+| 工程校验 | ✅ | `validate_config.py` 通过（41 DefInjected tags / 1 lang）；43/43 单测通过；committed DLL 与 Release 构建一致 |
+
+**总判：第四轮自检优化验收通过**（Player.log · 2026-08-17；玩家确认）。
 
 ### 1.2r 阶段四 · 4.8 Bridge-A 验收复查（Player.log · 2026-07-19）
 

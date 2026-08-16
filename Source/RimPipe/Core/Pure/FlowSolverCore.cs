@@ -10,7 +10,7 @@ public static class FlowSolverCore
 
 	public static float PressureFromAmount(float amount, float capacity)
 	{
-		if (capacity <= AmountEpsilon)
+		if (float.IsNaN(amount) || float.IsNaN(capacity) || capacity <= AmountEpsilon)
 		{
 			return 0f;
 		}
@@ -43,6 +43,10 @@ public static class FlowSolverCore
 		float maxFlowRate,
 		float viscosity)
 	{
+		if (float.IsNaN(amountSrc) || float.IsNaN(amountDst) || float.IsNaN(capacityDst))
+		{
+			return 0f;
+		}
 		if (amountSrc < AmountEpsilon)
 		{
 			return 0f;
@@ -78,6 +82,11 @@ public static class FlowSolverCore
 		float maxFlowRate,
 		float viscosity)
 	{
+		if (float.IsNaN(amountHi) || float.IsNaN(amountLo)
+			|| float.IsNaN(capacityHi) || float.IsNaN(capacityLo))
+		{
+			return 0f;
+		}
 		float pHi = PressureFromAmount(amountHi, capacityHi);
 		float pLo = PressureFromAmount(amountLo, capacityLo);
 
