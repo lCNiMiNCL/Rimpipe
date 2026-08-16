@@ -145,6 +145,40 @@ public class ChemSolverCoreTests
 	}
 
 	[Fact]
+	public void ComputeBatchCount_InputFluidMismatch()
+	{
+		var rx = CreateLoxRp1();
+		var inputs = new List<ChemContainerState>
+		{
+			new ChemContainerState("WrongFluid", 50f, 100f, 25f),
+			new ChemContainerState("RP1", 50f, 100f, 25f)
+		};
+		float n = ChemSolverCore.ComputeBatchCount(rx, inputs, Outputs(), true, 2.3f, out _, out string? reason);
+		Assert.Equal(0f, n);
+		Assert.Equal("input[0]fluid", reason);
+	}
+
+	[Fact]
+	public void TryGetInputPerBatch_ReturnsStoichAmounts()
+	{
+		var rx = CreateLoxRp1();
+		var perIn = new List<float>();
+		Assert.True(ChemSolverCore.TryGetInputPerBatch(rx, 2.3f, perIn, out string? reason));
+		Assert.Null(reason);
+		Assert.Equal(2, perIn.Count);
+		Assert.Equal(2.3f * 1f, perIn[0], 4); // ox = fuelStoich * mixRatio
+		Assert.Equal(1f, perIn[1], 4);        // fuel = fuelStoich
+	}
+
+	[Fact]
+	public void ComputeBatchCount_NoReactionReturnsNoReaction()
+	{
+		float n = ChemSolverCore.ComputeBatchCount(null, Inputs(), Outputs(), true, 2.3f, out _, out string? reason);
+		Assert.Equal(0f, n);
+		Assert.Equal("noReaction", reason);
+	}
+
+	[Fact]
 	public void BuildAmountDeltas_MatchesStoichiometry()
 	{
 		var rx = CreateLoxRp1();

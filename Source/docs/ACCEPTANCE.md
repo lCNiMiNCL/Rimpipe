@@ -322,8 +322,9 @@
 |----|------|
 | 化学批处理分配 | `CommitChem` 每反应釜每批只构建一次 `ChemReactionSpec` 与容器状态快照，`ComputeBatchCount`/`BuildAmountDeltas` 复用，避免重复 `GetChemSpec`/`ToStates` |
 | 破损唤醒分配 | `NotifyBreachChanged` 无参与带参版本改用 `scratchBreachWokeNets` 复用 HashSet |
+| 测试补充 | 新增输入流体不符、TryGetInputPerBatch 正常路径、null reaction 等测试；单元测试总数 30→33 |
 
-**状态：代码已修改，`dotnet build` 0 警告 0 错误、30 个单元测试通过；待游戏内回归确认。**
+**状态：代码已修改，`dotnet build` 0 警告 0 错误、33 个单元测试通过；待游戏内回归确认。**
 
 ### 1.2ah DLL 可复现构建工程（CI 待验证）
 
