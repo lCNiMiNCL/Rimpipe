@@ -156,6 +156,7 @@
 
 ### 1.2v 阶段 2 重构 partial 验收复查（Player.log + 玩家确认 · 2026-08-16）
 
+> 加载 DLL：0.5.1
 > 本轮验证 `MapComponent_PipeNetwork` 与 `RimPipeDebugAsserts` partial 拆分后的行为一致性。
 > Player.log：`C:\Users\12135\AppData\LocalLow\Ludeon Studios\RimWorld by Ludeon Studios\Player.log`
 
