@@ -271,6 +271,19 @@
 
 **状态：已游戏内确认通过：`R-通道 4/4`、`R-全部 33/33`。**
 
+### 1.2ae 阶段 4 · 4.5 拓扑重建分配优化实现（待游戏验证）
+
+> 实现记录，尚未进行游戏内回归验证。
+
+| 项 | 说明 |
+|----|------|
+| RebuildDirtyLocal | 高频临时 List/HashSet 改为字段复用，方法入口统一 Clear |
+| BuildPipeComponent | component / attachments / owner / queue / borderPairs / attachedBuildings 改为字段复用 |
+| ShortestPipePathCellCount | queue / prev 改为字段复用 |
+| FloodPipeComponent / FloodComponentSet | 洪水队列改为字段复用 |
+
+**状态：代码已实现，`dotnet build` 0 警告 0 错误；待游戏内回归确认。**
+
 ### 1.2r 阶段四 · 4.8 Bridge-A 验收复查（Player.log · 2026-07-19）
 
 | 项 | 结论 | 证据 / 备注 |

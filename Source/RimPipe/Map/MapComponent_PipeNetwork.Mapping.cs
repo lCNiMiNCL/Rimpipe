@@ -13,6 +13,17 @@ namespace RimPipe;
 /// </summary>
 public partial class MapComponent_PipeNetwork : MapComponent
 {
+	// —— 4.5 拓扑重建分配优化：管道分量构建 / 最短路径 / 洪水队列复用 ——
+	private readonly List<(IntVec3 cell, int channel)> scratchComponentList = new List<(IntVec3 cell, int channel)>();
+	private readonly List<PipeAttachment> scratchAttachments = new List<PipeAttachment>();
+	private readonly Dictionary<(IntVec3 cell, int channel), int> scratchOwner = new Dictionary<(IntVec3 cell, int channel), int>();
+	private readonly Queue<(IntVec3 cell, int channel)> scratchPipeQueue = new Queue<(IntVec3 cell, int channel)>();
+	private readonly HashSet<long> scratchBorderPairs = new HashSet<long>();
+	private readonly List<Building> scratchAttachedBuildings = new List<Building>();
+	private readonly Queue<(IntVec3 cell, int channel)> scratchPathQueue = new Queue<(IntVec3 cell, int channel)>();
+	private readonly Dictionary<(IntVec3 cell, int channel), (IntVec3 cell, int channel)> scratchPathPrev = new Dictionary<(IntVec3 cell, int channel), (IntVec3 cell, int channel)>();
+	private readonly Queue<(IntVec3 cell, int channel)> scratchFloodQueue = new Queue<(IntVec3 cell, int channel)>();
+
 	/// <summary>由 CompPipeCell.breached 重刷路径 Mapping.leakOpen（全量版本，供整图重建/兼容调用）。</summary>
 	private void ApplyBreachLeakFlags()
 	{
@@ -387,10 +398,13 @@ public partial class MapComponent_PipeNetwork : MapComponent
 	/// </summary>
 	private void BuildPipeComponent(HashSet<(IntVec3 cell, int channel)> componentSet, HashSet<long> linkedPairs)
 	{
-		List<(IntVec3 cell, int channel)> component = new List<(IntVec3, int)>(componentSet);
+		List<(IntVec3 cell, int channel)> component = scratchComponentList;
+		component.Clear();
+		component.AddRange(componentSet);
 
 		// 1) 找出所有接入节点落在本分量上的端口挂接（端口组必须等于管道格该方向出口组）
-		List<PipeAttachment> attachments = new List<PipeAttachment>();
+		List<PipeAttachment> attachments = scratchAttachments;
+		scratchAttachments.Clear();
 		for (int i = 0; i < members.Count; i++)
 		{
 			CompPipeNetworkMember m = members[i];
@@ -436,8 +450,10 @@ public partial class MapComponent_PipeNetwork : MapComponent
 		}
 
 		// 2) 多源 BFS（节点空间）：每个挂接节点为领地种子，交界建 Mapping
-		Dictionary<(IntVec3, int), int> owner = new Dictionary<(IntVec3, int), int>();
-		Queue<(IntVec3 cell, int channel)> q = new Queue<(IntVec3, int)>();
+		Dictionary<(IntVec3, int), int> owner = scratchOwner;
+		scratchOwner.Clear();
+		Queue<(IntVec3 cell, int channel)> q = scratchPipeQueue;
+		scratchPipeQueue.Clear();
 		for (int i = 0; i < attachments.Count; i++)
 		{
 			(IntVec3, int) node = (attachments[i].outerCell, attachments[i].channel);
@@ -454,7 +470,8 @@ public partial class MapComponent_PipeNetwork : MapComponent
 			q.Enqueue(node);
 		}
 
-		HashSet<long> borderPairs = new HashSet<long>();
+		HashSet<long> borderPairs = scratchBorderPairs;
+		scratchBorderPairs.Clear();
 		while (q.Count > 0)
 		{
 			(IntVec3 cell, int ch) = q.Dequeue();
@@ -506,7 +523,8 @@ public partial class MapComponent_PipeNetwork : MapComponent
 		List<(IntVec3 cell, int channel)> component,
 		HashSet<(IntVec3 cell, int channel)> componentSet)
 	{
-		List<Building> attached = new List<Building>();
+		List<Building> attached = scratchAttachedBuildings;
+		attached.Clear();
 		if (a.member.parent is Building ba)
 		{
 			attached.Add(ba);
@@ -547,8 +565,10 @@ public partial class MapComponent_PipeNetwork : MapComponent
 		{
 			return 1;
 		}
-		Queue<(IntVec3, int)> q = new Queue<(IntVec3, int)>();
-		Dictionary<(IntVec3, int), (IntVec3, int)> prev = new Dictionary<(IntVec3, int), (IntVec3, int)>();
+		Queue<(IntVec3, int)> q = scratchPathQueue;
+		scratchPathQueue.Clear();
+		Dictionary<(IntVec3, int), (IntVec3, int)> prev = scratchPathPrev;
+		scratchPathPrev.Clear();
 		q.Enqueue(start);
 		prev[start] = start;
 		while (q.Count > 0)

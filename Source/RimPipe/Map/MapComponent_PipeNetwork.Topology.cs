@@ -13,6 +13,21 @@ namespace RimPipe;
 /// </summary>
 public partial class MapComponent_PipeNetwork : MapComponent
 {
+	// —— 4.5 拓扑重建分配优化：局部重建高频临时容器复用 ——
+	private readonly List<DelayedAction> scratchMemberActions = new List<DelayedAction>();
+	private readonly HashSet<IntVec3> scratchPipeDirtyCells = new HashSet<IntVec3>();
+	private readonly HashSet<IntVec3> scratchAffectedPipeCells = new HashSet<IntVec3>();
+	private readonly List<HashSet<(IntVec3 cell, int channel)>> scratchComponents = new List<HashSet<(IntVec3 cell, int channel)>>();
+	private readonly HashSet<(IntVec3 cell, int channel)> scratchVisited = new HashSet<(IntVec3 cell, int channel)>();
+	private readonly HashSet<CompPipeNetworkMember> scratchDirtyMembers = new HashSet<CompPipeNetworkMember>();
+	private readonly HashSet<CompPipeNetworkMember> scratchAffectedMembers = new HashSet<CompPipeNetworkMember>();
+	private readonly List<(Container a, Container b)> scratchDeletedPipePairs = new List<(Container, Container)>();
+	private readonly HashSet<Container> scratchAffectedContainers = new HashSet<Container>();
+	private readonly HashSet<long> scratchLinkedPairs = new HashSet<long>();
+	private readonly List<HashSet<(IntVec3 cell, int channel)>> scratchReconnectComponents = new List<HashSet<(IntVec3 cell, int channel)>>();
+	private readonly HashSet<(IntVec3 cell, int channel)> scratchReconnectSeen = new HashSet<(IntVec3 cell, int channel)>();
+	private readonly HashSet<(Container, Container)> scratchRecovered = new HashSet<(Container, Container)>();
+	private readonly HashSet<Container> scratchSeedContainers = new HashSet<Container>();
 
 	public void RegisterMember(CompPipeNetworkMember comp, bool respawningAfterLoad)
 	{
@@ -363,8 +378,10 @@ public partial class MapComponent_PipeNetwork : MapComponent
 		batchCachesDirty = true;
 
 		// —— 1) 收集脏动作：MemberChanged 与 PipeChanged 分流 ——
-		List<DelayedAction> memberActions = new List<DelayedAction>();
-		HashSet<IntVec3> pipeDirtyCells = new HashSet<IntVec3>();
+		List<DelayedAction> memberActions = scratchMemberActions;
+		scratchMemberActions.Clear();
+		HashSet<IntVec3> pipeDirtyCells = scratchPipeDirtyCells;
+		scratchPipeDirtyCells.Clear();
 		for (int i = 0; i < actions.Count; i++)
 		{
 			DelayedAction a = actions[i];
@@ -380,9 +397,12 @@ public partial class MapComponent_PipeNetwork : MapComponent
 		}
 
 		// —— 2)+4) 受影响管道分量洪水收集（规格步骤 4 的主体，先于阈值粗算） ——
-		HashSet<IntVec3> affectedPipeCells = new HashSet<IntVec3>();
-		List<HashSet<(IntVec3 cell, int channel)>> components = new List<HashSet<(IntVec3 cell, int channel)>>();
-		HashSet<(IntVec3 cell, int channel)> visited = new HashSet<(IntVec3 cell, int channel)>();
+		HashSet<IntVec3> affectedPipeCells = scratchAffectedPipeCells;
+		scratchAffectedPipeCells.Clear();
+		List<HashSet<(IntVec3 cell, int channel)>> components = scratchComponents;
+		scratchComponents.Clear();
+		HashSet<(IntVec3 cell, int channel)> visited = scratchVisited;
+		scratchVisited.Clear();
 		// 放管（格还在）：从格各通道洪水；拆管（格已移除）：从 4 邻各自洪水（分裂）
 		foreach (IntVec3 c in pipeDirtyCells)
 		{
@@ -431,8 +451,10 @@ public partial class MapComponent_PipeNetwork : MapComponent
 		// —— 3) 受影响构件集 ——
 		// dirtyMembers：memberActions 的 member（含已注销，供删除规则匹配容器）
 		// affectedMembers：脏构件（parent != null）∪ 被指/对向构件 ∪ 受影响分量附件构件
-		HashSet<CompPipeNetworkMember> dirtyMembers = new HashSet<CompPipeNetworkMember>();
-		HashSet<CompPipeNetworkMember> affectedMembers = new HashSet<CompPipeNetworkMember>();
+		HashSet<CompPipeNetworkMember> dirtyMembers = scratchDirtyMembers;
+		scratchDirtyMembers.Clear();
+		HashSet<CompPipeNetworkMember> affectedMembers = scratchAffectedMembers;
+		scratchAffectedMembers.Clear();
 		for (int i = 0; i < memberActions.Count; i++)
 		{
 			CompPipeNetworkMember? mem = memberActions[i].member;
@@ -475,8 +497,10 @@ public partial class MapComponent_PipeNetwork : MapComponent
 		}
 
 		// —— 6) 删除受影响区域的旧 mapping（倒序遍历） ——
-		List<(Container a, Container b)> deletedPipePairs = new List<(Container, Container)>();
-		HashSet<Container> affectedContainers = new HashSet<Container>();
+		List<(Container a, Container b)> deletedPipePairs = scratchDeletedPipePairs;
+		scratchDeletedPipePairs.Clear();
+		HashSet<Container> affectedContainers = scratchAffectedContainers;
+		scratchAffectedContainers.Clear();
 		for (int i = mappings.Count - 1; i >= 0; i--)
 		{
 			Mapping m = mappings[i];
@@ -546,7 +570,8 @@ public partial class MapComponent_PipeNetwork : MapComponent
 		}
 
 		// —— 7) linkedPairs 初始化：剩余 mapping 全部预置去重 key ——
-		HashSet<long> linkedPairs = new HashSet<long>();
+		HashSet<long> linkedPairs = scratchLinkedPairs;
+		scratchLinkedPairs.Clear();
 		for (int i = 0; i < mappings.Count; i++)
 		{
 			Mapping m = mappings[i];
@@ -607,14 +632,17 @@ public partial class MapComponent_PipeNetwork : MapComponent
 		}
 
 		// —— 9) 环路重连检查：对「重建后仍未恢复」的被删管道 pair 找替代连通分量 ——
-		List<HashSet<(IntVec3 cell, int channel)>> reconnectComponents = new List<HashSet<(IntVec3 cell, int channel)>>();
+		List<HashSet<(IntVec3 cell, int channel)>> reconnectComponents = scratchReconnectComponents;
+		scratchReconnectComponents.Clear();
 		// 分量去重 key：同一分量可能被多个 pair / 附件格洪水到，用分量最小节点作规范 key
 		//（List.Contains 对 HashSet 是引用相等，不能用于去重）
-		HashSet<(IntVec3 cell, int channel)> reconnectSeen = new HashSet<(IntVec3 cell, int channel)>();
+		HashSet<(IntVec3 cell, int channel)> reconnectSeen = scratchReconnectSeen;
+		scratchReconnectSeen.Clear();
 		if (deletedPipePairs.Count > 0)
 		{
 			// 恢复判定：当前 mappings 里存在同 key（Flow）的 pair
-			HashSet<(Container, Container)> recovered = new HashSet<(Container, Container)>();
+			HashSet<(Container, Container)> recovered = scratchRecovered;
+			scratchRecovered.Clear();
 			for (int i = 0; i < mappings.Count; i++)
 			{
 				Mapping m = mappings[i];
@@ -787,7 +815,8 @@ public partial class MapComponent_PipeNetwork : MapComponent
 		}
 
 		// —— 11) netId 增量：受影响域重打 id，未受影响域完全不动 ——
-		HashSet<Container> seedContainers = new HashSet<Container>();
+		HashSet<Container> seedContainers = scratchSeedContainers;
+		scratchSeedContainers.Clear();
 		foreach (CompPipeNetworkMember mem in dirtyMembers)
 		{
 			if (mem?.Containers == null)
@@ -848,7 +877,8 @@ public partial class MapComponent_PipeNetwork : MapComponent
 		HashSet<IntVec3> affectedPipeCells)
 	{
 		HashSet<(IntVec3, int)> comp = new HashSet<(IntVec3, int)>();
-		Queue<(IntVec3 cell, int channel)> flood = new Queue<(IntVec3, int)>();
+		Queue<(IntVec3 cell, int channel)> flood = scratchFloodQueue;
+		scratchFloodQueue.Clear();
 		visited.Add(seed);
 		comp.Add(seed);
 		flood.Enqueue(seed);
@@ -913,7 +943,8 @@ public partial class MapComponent_PipeNetwork : MapComponent
 	private HashSet<(IntVec3 cell, int channel)> FloodComponentSet((IntVec3 cell, int channel) seed)
 	{
 		HashSet<(IntVec3, int)> comp = new HashSet<(IntVec3, int)>();
-		Queue<(IntVec3, int)> flood = new Queue<(IntVec3, int)>();
+		Queue<(IntVec3, int)> flood = scratchFloodQueue;
+		scratchFloodQueue.Clear();
 		comp.Add(seed);
 		flood.Enqueue(seed);
 		while (flood.Count > 0)
