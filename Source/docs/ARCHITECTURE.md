@@ -40,7 +40,7 @@ MapComponent_PipeNetwork
 | Tick | 行为 |
 |------|------|
 | 每 tick 开头 | 消化延迟拓扑 |
-| **0–18** | `AccumulateFlow`：写 `ContainerDelta`；批内 Jacobi 虚拟量；竞争比例缩放 |
+| **0–18** | `AccumulateFlow`：写 `pendingDeltas`；批内 Jacobi 虚拟量；竞争比例缩放 |
 | **19** | **仅** `CommitDeltas`；incomplete / `leakOpen` / 储罐 `breached` 在此销毁量 |
 
 ### 3.4 Flow 公式（3.1 Pr-A：Equalize 按填充比压力；阀/泵仍只改 rate）
@@ -1126,7 +1126,7 @@ want  = min(maxFlowRate, amountSrc, freeDst)
 | **AmbientOnly** | 跳过 | 轻 Commit：泄漏 + Amb |
 | **FullyQuiet** | 跳过 | 跳过体；仍每批结束时廉价 `Reevaluate`（室温变化可→AmbientOnly） |
 
-评估：`ReevaluateSleepState` 在完整/轻 Commit 后、DebugForce 后、FullyQuiet 的 phase-19；**禁止**每 tick Jacobi。有 leakOpen/incomplete/breached 有量 / Flow want / Heat want → Busy；否则有 Amb 需求 → AmbientOnly；否则 FullyQuiet。
+评估：`ReevaluateAllNetSleepStates` 在完整/轻 Commit 后、DebugForce 后、FullyQuiet 的 phase-19；**禁止**每 tick Jacobi。有 leakOpen/incomplete/breached 有量 / Flow want / Heat want → Busy；否则有 Amb 需求 → AmbientOnly；否则 FullyQuiet。
 
 #### 7.1.3 任务清单
 
@@ -1903,10 +1903,10 @@ B1–B2 **已编码**；B3 为手测流程。**不等于**启动 DirtyTopo 编�
 
 ## 7.12 决议：4.12 Debug 测试整理（已锁定 · 2026-07-20）
 
-> **当前 0.5.1 菜单：** 11 个工具 + 6 个套件 = **17 项**。历史 0.4.1/0.4.3 的 12/14 键菜单见 `archive/RimPipe_TODO.full.md`。
+> **当前 0.6.0 菜单：** 11 个工具 + 6 个套件 = **17 项**。历史 0.4.1/0.4.3 的 12/14 键菜单见 `archive/RimPipe_TODO.full.md`。
 > **历史决议：** 玩家确认顶层原 **12 键**（回归套件收官）；旧断言键**退出菜单**；误报硬化**同切片**；**Dev 三通生成删除**；0.4.3 起 +2 Benchmark 键 → 14 键。
 
-### 7.12.1 顶层菜单键（当前 0.5.1）
+### 7.12.1 顶层菜单键（当前 0.6.0）
 
 | # | 名称 | 类型 | 职责 |
 |---|------|------|------|

@@ -171,11 +171,6 @@ public partial class MapComponent_PipeNetwork : MapComponent
 		PipeNetworkSleepState s = sleepStates[netId];
 		return s == PipeNetworkSleepState.Busy || s == PipeNetworkSleepState.AmbientOnly;
 	}
-	public void ReevaluateSleepState()
-	{
-		ReevaluateAllNetSleepStates();
-	}
-
 	public void ReevaluateAllNetSleepStates()
 	{
 		EnsureSleepStatesCapacity();

@@ -398,6 +398,20 @@
 
 **总判：第四轮自检优化验收通过**（Player.log · 2026-08-17；玩家确认）。
 
+### 1.2al 0.6.0 阶段 2 重构遗留实现（本地验证 · 游戏验收待补）
+
+> 加载 DLL：0.6.0
+> 本轮实现：核心数据封装 + 死代码清理。尚未进行游戏内 R-全部 验收。
+
+| 项 | 说明 |
+|----|------|
+| 死代码清理 | 删除 `ContainerDelta` 与 `ReevaluateSleepState()`；`MappingType.Chemical` 保留为预留占位 |
+| 核心数据封装 | `Container` / `Mapping` / `Port` / `ChemReactorBinding` 运行时字段改为只读属性；`CompPipeNetworkMember.Containers` / `Ports` 改为 `IReadOnlyList` |
+| 本地验证 | Release 构建 0 警告 / 0 错误；43/43 单测通过；`validate_config.py` 通过；committed DLL 与 Release 一致 |
+| 待补 | 游戏内 `R-全部` 33/33；存读档后再跑 `R-全部` 33/33 |
+
+**状态：实现与本地工程验证完成，游戏内验收待玩家执行。**
+
 ### 1.2r 阶段四 · 4.8 Bridge-A 验收复查（Player.log · 2026-07-19）
 
 > 加载 DLL：0.5.1

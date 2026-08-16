@@ -9,26 +9,31 @@ namespace RimPipe;
 /// </summary>
 public class Port : IExposable
 {
-	public Rot4 localRot = Rot4.North;
-	public int containerIndex;
+	private Rot4 _localRot = Rot4.North;
+	private int _containerIndex;
 
 	/// <summary>
 	/// 接入通道：0=A（默认），1=B。设备通过端口声明接入哪套连接组的管网；
 	/// 只与管道格「同组」的方向出口连通（管道格该方向出口属另一组则端口悬空）。
 	/// </summary>
-	public int channel;
+	private int _channel;
 
-	public CompPipeNetworkMember? owner;
+	private CompPipeNetworkMember? _owner;
+
+	public Rot4 localRot { get => _localRot; internal set => _localRot = value; }
+	public int containerIndex { get => _containerIndex; internal set => _containerIndex = value; }
+	public int channel { get => _channel; internal set => _channel = value; }
+	public CompPipeNetworkMember? owner { get => _owner; internal set => _owner = value; }
 
 	public Container? Container
 	{
 		get
 		{
-			if (owner == null || containerIndex < 0 || containerIndex >= owner.Containers.Count)
+			if (_owner == null || _containerIndex < 0 || _containerIndex >= _owner.Containers.Count)
 			{
 				return null;
 			}
-			return owner.Containers[containerIndex];
+			return _owner.Containers[_containerIndex];
 		}
 	}
 
@@ -36,11 +41,11 @@ public class Port : IExposable
 	{
 		get
 		{
-			if (owner == null)
+			if (_owner == null)
 			{
-				return localRot;
+				return _localRot;
 			}
-			return PipeRotUtility.ToWorld(localRot, owner.parent.Rotation);
+			return PipeRotUtility.ToWorld(_localRot, _owner.parent.Rotation);
 		}
 	}
 
@@ -48,18 +53,18 @@ public class Port : IExposable
 	{
 		get
 		{
-			if (owner == null)
+			if (_owner == null)
 			{
 				return IntVec3.Invalid;
 			}
-			return PipeRotUtility.OuterCell(owner.parent.Position, WorldRot);
+			return PipeRotUtility.OuterCell(_owner.parent.Position, WorldRot);
 		}
 	}
 
 	public void ExposeData()
 	{
-		Scribe_Values.Look(ref localRot, "localRot", Rot4.North);
-		Scribe_Values.Look(ref containerIndex, "containerIndex", 0);
-		Scribe_Values.Look(ref channel, "channel", 0);
+		Scribe_Values.Look(ref _localRot, "localRot", Rot4.North);
+		Scribe_Values.Look(ref _containerIndex, "containerIndex", 0);
+		Scribe_Values.Look(ref _channel, "channel", 0);
 	}
 }

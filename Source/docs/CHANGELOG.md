@@ -2,6 +2,14 @@
 
 > 版本记录主要面向下游模组与维护者。由原 `Source/RimPipe_API.md` 的版本短记整理。
 
+## 0.6.0
+- 阶段 2 重构遗留处理：核心数据封装与死代码清理。
+- `Container` / `Mapping` / `Port` / `ChemReactorBinding` 的运行时字段改为只读属性，写操作收敛到 `internal`。
+- `CompPipeNetworkMember.Containers` / `Ports` 改为 `IReadOnlyList` 只读视图。
+- 删除无引用代码：`ContainerDelta`、`MapComponent_PipeNetwork.ReevaluateSleepState()`。
+- `MappingType.Chemical` 保留为预留占位，不参与当前运行路径。
+- **API 变更：** 核心数据字段从 public field 改为 read-only property；当前无下游 Mod 引用，因此不保留旧字段兼容层。schema 仍 1。
+
 ## 0.5.1
 - 6.19 管道 A/B 双通道（方向分组、端口 channel、Gizmo 逐向配置）。
 - 6.18 流体物理量（粘度→流动阻力、比热→传热）。

@@ -10,8 +10,11 @@ namespace RimPipe;
 /// </summary>
 public class CompPipeNetworkMember : ThingComp
 {
-	public List<Container> Containers = new List<Container>();
-	public List<Port> Ports = new List<Port>();
+	private List<Container> _containers = new List<Container>();
+	private List<Port> _ports = new List<Port>();
+
+	public IReadOnlyList<Container> Containers => _containers;
+	public IReadOnlyList<Port> Ports => _ports;
 
 	public CompProperties_PipeNetworkMember Props => (CompProperties_PipeNetworkMember)props;
 
@@ -31,10 +34,10 @@ public class CompPipeNetworkMember : ThingComp
 	public override void PostExposeData()
 	{
 		base.PostExposeData();
-		Scribe_Collections.Look(ref Containers, "containers", LookMode.Deep);
-		if (Containers == null)
+		Scribe_Collections.Look(ref _containers, "containers", LookMode.Deep);
+		if (_containers == null)
 		{
-			Containers = new List<Container>();
+			_containers = new List<Container>();
 		}
 		if (Scribe.mode == LoadSaveMode.PostLoadInit)
 		{
@@ -45,9 +48,9 @@ public class CompPipeNetworkMember : ThingComp
 	private void EnsureRuntimeObjects(bool respawningAfterLoad)
 	{
 		CompProperties_PipeNetworkMember p = Props;
-		if (!respawningAfterLoad || Containers.Count == 0)
+		if (!respawningAfterLoad || _containers.Count == 0)
 		{
-			Containers.Clear();
+			_containers.Clear();
 			for (int i = 0; i < p.containers.Count; i++)
 			{
 				PipeContainerProp cp = p.containers[i];
@@ -63,14 +66,14 @@ public class CompPipeNetworkMember : ThingComp
 					c.fluid = DefDatabase<FluidDef>.GetNamedSilentFail(cp.fluidDefName);
 				}
 				c.SyncPressureFromAmount();
-				Containers.Add(c);
+				_containers.Add(c);
 			}
 		}
 		else
 		{
-			for (int i = 0; i < Containers.Count; i++)
+			for (int i = 0; i < _containers.Count; i++)
 			{
-				Container c = Containers[i];
+				Container c = _containers[i];
 				c.owner = this;
 				c.containerIndex = i;
 				if (i < p.containers.Count)
@@ -95,9 +98,9 @@ public class CompPipeNetworkMember : ThingComp
 
 			// 4.4 旧档容器补齐：若旧存档容器数少于当前 Props，按 Props 追加默认容器。
 			// 这是 additive 迁移，不升 schema，也不改动已有容器数据。
-			if (Containers.Count < p.containers.Count)
+			if (_containers.Count < p.containers.Count)
 			{
-				for (int i = Containers.Count; i < p.containers.Count; i++)
+				for (int i = _containers.Count; i < p.containers.Count; i++)
 				{
 					PipeContainerProp cp = p.containers[i];
 					Container c = new Container
@@ -112,20 +115,20 @@ public class CompPipeNetworkMember : ThingComp
 						c.fluid = DefDatabase<FluidDef>.GetNamedSilentFail(cp.fluidDefName);
 					}
 					c.SyncPressureFromAmount();
-					Containers.Add(c);
+					_containers.Add(c);
 					Log.Warning(
 						$"[RimPipe] 读档补齐容器 {parent?.LabelCap} 容器[{i}]（Props 新增，按默认值初始化）。");
 				}
 			}
 		}
 
-		Ports.Clear();
+		_ports.Clear();
 		if (p.ports != null)
 		{
 			for (int i = 0; i < p.ports.Count; i++)
 			{
 				PipePortProp pp = p.ports[i];
-				Ports.Add(new Port
+				_ports.Add(new Port
 				{
 					localRot = pp.localRot,
 					containerIndex = pp.containerIndex,
@@ -138,11 +141,11 @@ public class CompPipeNetworkMember : ThingComp
 
 	public Port? FindPortFacingWorld(Rot4 worldRot)
 	{
-		for (int i = 0; i < Ports.Count; i++)
+		for (int i = 0; i < _ports.Count; i++)
 		{
-			if (Ports[i].WorldRot == worldRot)
+			if (_ports[i].WorldRot == worldRot)
 			{
-				return Ports[i];
+				return _ports[i];
 			}
 		}
 		return null;
@@ -150,11 +153,11 @@ public class CompPipeNetworkMember : ThingComp
 
 	public Port? FindPortWhoseOuterCellIs(IntVec3 cell)
 	{
-		for (int i = 0; i < Ports.Count; i++)
+		for (int i = 0; i < _ports.Count; i++)
 		{
-			if (Ports[i].OuterCell == cell)
+			if (_ports[i].OuterCell == cell)
 			{
-				return Ports[i];
+				return _ports[i];
 			}
 		}
 		return null;
@@ -162,14 +165,14 @@ public class CompPipeNetworkMember : ThingComp
 
 	public override string? CompInspectStringExtra()
 	{
-		if (Containers.Count == 0 && Ports.Count == 0)
+		if (_containers.Count == 0 && _ports.Count == 0)
 		{
 			return null;
 		}
 		StringBuilder sb = new StringBuilder();
-		for (int i = 0; i < Containers.Count; i++)
+		for (int i = 0; i < _containers.Count; i++)
 		{
-			Container c = Containers[i];
+			Container c = _containers[i];
 			string fluidName = c.fluid != null ? c.fluid.label : "RimPipe_Inspect_Empty".Translate().ToString();
 			sb.AppendLine(
 				"RimPipe_Inspect_Container".Translate(
@@ -183,11 +186,11 @@ public class CompPipeNetworkMember : ThingComp
 		}
 
 		MapComponent_PipeNetwork? net = parent.Spawned ? parent.Map.GetComponent<MapComponent_PipeNetwork>() : null;
-		if (Ports.Count > 0 && parent.Spawned)
+		if (_ports.Count > 0 && parent.Spawned)
 		{
-			for (int i = 0; i < Ports.Count; i++)
+			for (int i = 0; i < _ports.Count; i++)
 			{
-				Port p = Ports[i];
+				Port p = _ports[i];
 				bool docked = net != null && net.IsPortLikelyDocked(p);
 				sb.Append("RimPipe_Inspect_Port".Translate(p.WorldRot.ToStringHuman(), p.OuterCell));
 				sb.Append(docked ? "RimPipe_Inspect_Docked".Translate() : "RimPipe_Inspect_Undocked".Translate());

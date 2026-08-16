@@ -63,6 +63,7 @@
 
 | 版本 | 要点 |
 |------|------|
+| **0.6.0** | 阶段 2 重构遗留：核心数据类字段封装为只读属性，`CompPipeNetworkMember.Containers` / `Ports` 改为只读视图；删除 `ContainerDelta` 与 `ReevaluateSleepState()`。**API 变更**：核心数据字段从 public field 改为 read-only property；schema 仍 1 |
 | **0.5.1** | 6.19 管道 A/B 双通道（方向分组、端口 channel、Gizmo 逐向配置）；6.18 流体物理量（粘度→流动阻力、比热→传热）；工程与健壮性（partial 拆分、纯核抽取、单测+CI、R-全部、4.1-4.5 修复）。**无下游 API 变更**；schema 仍 1 |
 | **0.4.7** | DirtyTopo 局部脏区拓扑重建（放/拆管道不再整图重建）。**无下游 API 变更** |
 | **0.4.4–0.4.6** | 批级优化、休眠重评估单遍聚合、代码审查修复、批级缓存。**无下游 API 变更**；schema 仍 1 |
@@ -228,6 +229,8 @@ MapComponent_PipeNetwork net = map.GetComponent<MapComponent_PipeNetwork>();
 
 只读观察：`Members` / `Mappings` / `PipeCells` / `ChemReactors` / `SleepState` / `GetNetSleepState(netId)`。
 
+> **核心数据封装：** `Container` / `Mapping` / `Port` / `ChemReactorBinding` 的运行时字段已封装为只读属性。下游可以读 `amount` / `capacity` / `temperature` / `pressure` / `netId` / `maxFlowRate` 等，但不能直接赋值；`CompPipeNetworkMember.Containers` / `Ports` 也以 `IReadOnlyList` 形式暴露。改量请走 `TrySetAmount` / `TryAddAmount`，改温请走 `TrySetTemperature`。
+
 ### 4.1 改量 / 改温（稳定公开面）
 
 ```csharp
@@ -266,7 +269,7 @@ net.TryGetBreached(thing, out bool breached);
 
 ---
 
-## 5. 能力边界（本版 0.5.1）
+## 5. 能力边界（本版 0.6.0）
 
 | 可以做 | 不要做 |
 |--------|--------|

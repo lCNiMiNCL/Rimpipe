@@ -5,7 +5,7 @@ RimPipe 是 RimWorld 1.6 的流体管道框架模组，基于容器–端口–�
 > **English summary:** RimPipe is a fluid pipeline framework mod for RimWorld 1.6. It implements a Container / Port / Mapping model with pressure equalization, heat exchange, chemical reactions, breach leakage, and per-network sleep. Downstream mods can depend on `rimpipe.core` and extend it via `FluidDef`, `PipeReactionDef`, and `IPipeInternalMappingContributor`. See [`Source/RimPipe_API.md`](Source/RimPipe_API.md) for the full downstream API.
 
 - **作者 / 维护者：** NewFrontierTeam
-- **当前版本：** 0.5.1
+- **当前版本：** 0.6.0
 - **支持游戏版本：** RimWorld 1.6
 - **packageId：** `rimpipe.core`
 - **存档 schema：** 1（稳定面以 0.4.0 对内冻结为准）
