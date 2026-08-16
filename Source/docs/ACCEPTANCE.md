@@ -335,6 +335,7 @@
 |----|------|
 | net48 自包含构建 | `RimPipe.csproj` 增加 `Microsoft.NETFramework.ReferenceAssemblies`，降低对 runner 预装 targeting pack 的依赖 |
 | CI deterministic 门禁 | 新增“Verify deterministic Release build”步骤：同一配置连续构建两次到不同目录，校验 DLL 哈希一致 |
+| CI DLL 漂移告警 | 新增“Warn on committed DLL drift”步骤：committed DLL 与 CI 构建产物不一致时输出 warning（不阻断） |
 | SDK 固定 | CI 固定 .NET SDK `8.0.100`，减少环境漂移 |
 
 **状态：代码/CI 已修改，`dotnet build` 0 警告 0 错误、30 个单元测试通过；CI deterministic 门禁待实际运行确认。**
