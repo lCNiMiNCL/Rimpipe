@@ -13,6 +13,8 @@
     <DebugSymbols Condition="'$(Configuration)' == 'Release'">false</DebugSymbols>
     <Optimize Condition="'$(Configuration)' == 'Release'">true</Optimize>
     <Deterministic>true</Deterministic>
+    <DeterministicSourcePaths>true</DeterministicSourcePaths>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <PathMap>$(MSBuildProjectDirectory)=RimPipe</PathMap>
   </PropertyGroup>

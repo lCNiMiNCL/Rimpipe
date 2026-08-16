@@ -14,9 +14,9 @@ $outB = Join-Path $env:TEMP "rimpipe_det_b"
 Push-Location $root
 try {
     Remove-Item -Recurse -Force $outA, $outB -ErrorAction SilentlyContinue
-    dotnet build "Source/RimPipe/RimPipe.csproj" --configuration $Configuration -v:minimal -p:OutputPath=$outA -p:AppendTargetFrameworkToOutputPath=false
+    dotnet build "Source/RimPipe/RimPipe.csproj" --configuration $Configuration -v:minimal -t:Rebuild -p:OutputPath=$outA -p:AppendTargetFrameworkToOutputPath=false
     if ($LASTEXITCODE -ne 0) { throw "first build failed" }
-    dotnet build "Source/RimPipe/RimPipe.csproj" --configuration $Configuration -v:minimal -p:OutputPath=$outB -p:AppendTargetFrameworkToOutputPath=false
+    dotnet build "Source/RimPipe/RimPipe.csproj" --configuration $Configuration -v:minimal -t:Rebuild -p:OutputPath=$outB -p:AppendTargetFrameworkToOutputPath=false
     if ($LASTEXITCODE -ne 0) { throw "second build failed" }
 
     $hashA = (Get-FileHash "$outA/RimPipe.dll").Hash

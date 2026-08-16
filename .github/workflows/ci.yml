@@ -35,13 +35,13 @@ jobs:
         run: dotnet build Source/RimPipe/RimPipe.csproj --configuration Debug -v:minimal
 
       - name: Build RimPipe (Release)
-        run: dotnet build Source/RimPipe/RimPipe.csproj --configuration Release -v:minimal
+        run: dotnet build Source/RimPipe/RimPipe.csproj --configuration Release -v:minimal -p:OutputPath=$env:RUNNER_TEMP/rimpipe_release -p:AppendTargetFrameworkToOutputPath=false
 
       - name: Verify deterministic Release build
         shell: pwsh
         run: |
-          dotnet build Source/RimPipe/RimPipe.csproj --configuration Release -v:minimal -p:OutputPath=$env:RUNNER_TEMP/rimpipe_a -p:AppendTargetFrameworkToOutputPath=false
-          dotnet build Source/RimPipe/RimPipe.csproj --configuration Release -v:minimal -p:OutputPath=$env:RUNNER_TEMP/rimpipe_b -p:AppendTargetFrameworkToOutputPath=false
+          dotnet build Source/RimPipe/RimPipe.csproj --configuration Release -v:minimal -t:Rebuild -p:OutputPath=$env:RUNNER_TEMP/rimpipe_a -p:AppendTargetFrameworkToOutputPath=false
+          dotnet build Source/RimPipe/RimPipe.csproj --configuration Release -v:minimal -t:Rebuild -p:OutputPath=$env:RUNNER_TEMP/rimpipe_b -p:AppendTargetFrameworkToOutputPath=false
           $hashA = (Get-FileHash "$env:RUNNER_TEMP/rimpipe_a/RimPipe.dll").Hash
           $hashB = (Get-FileHash "$env:RUNNER_TEMP/rimpipe_b/RimPipe.dll").Hash
           if ($hashA -ne $hashB) {

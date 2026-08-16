@@ -359,6 +359,19 @@
 
 **状态：已通过游戏内回归与 CI 验证；committed DLL 一致性已设为 CI 硬门禁。**
 
+### 1.2aj 二次审查 CI/DLL 门禁修复（本地已验证，CI 待跑）
+
+> 针对二次审查指出的 CI committed DLL 伪阳性与 deterministic 验证可靠性问题。
+
+| 项 | 说明 |
+|----|------|
+| CI committed DLL 伪阳性 | `Build RimPipe (Release)` 改为输出到 `RUNNER_TEMP/rimpipe_release`，不再覆盖 `Assemblies/RimPipe.dll`，确保后续 committed DLL 校验比对的是 checkout 原始文件 |
+| deterministic 验证 | deterministic 两次构建改为 `-t:Rebuild`，强制重新编译，避免共享 obj 时第二次命中增量缓存 |
+| csproj deterministic | 新增 `<DeterministicSourcePaths>true</DeterministicSourcePaths>` 与 `<ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>` |
+| 本地脚本 | `verify-deterministic.ps1` 同步改为 `-t:Rebuild` |
+
+**状态：本地验证通过（`verify-deterministic.ps1` Deterministic OK，`dotnet build` 0 警告 0 错误，33 单测通过）；CI 待实际运行确认。**
+
 ### 1.2r 阶段四 · 4.8 Bridge-A 验收复查（Player.log · 2026-07-19）
 
 > 加载 DLL：0.5.1
