@@ -67,6 +67,7 @@ CI 固定安装 `8.0.100`；本地若没有该版本，会自动使用已安装�
 - 本地也可运行：
   ```bat
   powershell -ExecutionPolicy Bypass -File ../../tools/verify-deterministic.ps1
+  powershell -ExecutionPolicy Bypass -File ../../tools/check-committed-dll.ps1
   ```
 - 若 committed DLL 与 CI 构建产物不一致，应先用上述脚本重建后再单独提交 DLL。
 
