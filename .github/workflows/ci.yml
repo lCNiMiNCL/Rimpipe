@@ -15,15 +15,20 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: 8.0.100
+          cache: true
+          cache-dependency-path: Source/RimPipe.Tests/RimPipe.Tests.csproj
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Build RimPipe
+      - name: Build RimPipe (Debug)
         run: dotnet build Source/RimPipe/RimPipe.csproj --configuration Debug -v:minimal
+
+      - name: Build RimPipe (Release)
+        run: dotnet build Source/RimPipe/RimPipe.csproj --configuration Release -v:minimal
 
       - name: Run unit tests
         run: dotnet test Source/RimPipe.Tests/RimPipe.Tests.csproj --configuration Debug -v:minimal

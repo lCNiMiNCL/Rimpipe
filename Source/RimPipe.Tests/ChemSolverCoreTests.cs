@@ -112,6 +112,39 @@ public class ChemSolverCoreTests
 	}
 
 	[Fact]
+	public void ComputeBatchCount_OutputCapacityLimits()
+	{
+		var rx = CreateLoxRp1();
+		// 出腔容量 10，产出每批 3.3，maxRate 5 → 最多约 3.03 批
+		float n = ChemSolverCore.ComputeBatchCount(
+			rx, Inputs(), Outputs(exhaust: 0f, capacity: 10f), true, 2.3f, out _, out _);
+		Assert.Equal(10f / 3.3f, n, 3);
+	}
+
+	[Fact]
+	public void ComputeBatchCount_OutputFluidMismatch()
+	{
+		var rx = CreateLoxRp1();
+		var outputs = new List<ChemContainerState>
+		{
+			new ChemContainerState("WrongFluid", 10f, 500f, 25f)
+		};
+		float n = ChemSolverCore.ComputeBatchCount(rx, Inputs(), outputs, true, 2.3f, out _, out string? reason);
+		Assert.Equal(0f, n);
+		Assert.Equal("output[0]fluid", reason);
+	}
+
+	[Fact]
+	public void TryGetInputPerBatch_MixPairFailure()
+	{
+		var rx = CreateLoxRp1();
+		rx.MixRatioOxidizerInputIndex = 99;
+		var perIn = new List<float>();
+		Assert.False(ChemSolverCore.TryGetInputPerBatch(rx, 2.3f, perIn, out string? reason));
+		Assert.Equal("mixPair", reason);
+	}
+
+	[Fact]
 	public void BuildAmountDeltas_MatchesStoichiometry()
 	{
 		var rx = CreateLoxRp1();

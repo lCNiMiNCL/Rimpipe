@@ -80,4 +80,17 @@ public class FlowSolverCoreTests
 		float want = FlowSolverCore.ComputeForcedWant(50f, 0f, 100f, 10f, 0f);
 		AssertClose(0f, want);
 	}
+
+	[Fact]
+	public void RateCap_ZeroViscosityReturnsZero()
+	{
+		AssertClose(0f, FlowSolverCore.ComputeRateCap(10f, 0f));
+	}
+
+	[Fact]
+	public void Equalize_ZeroViscosityReturnsZero()
+	{
+		float want = FlowSolverCore.ComputeEqualizeWant(80f, 20f, 100f, 100f, 10f, 0f);
+		AssertClose(0f, want);
+	}
 }

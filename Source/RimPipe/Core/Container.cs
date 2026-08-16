@@ -32,20 +32,7 @@ public class Container : IExposable
 	/// <summary>按当前（或批内虚拟）量重算填充比压力。批内 Jacobi 迭代必须走这里，别用手写 pressure。</summary>
 	public static float PressureFromAmount(float amount, float capacity)
 	{
-		if (capacity <= FlowSolver.AmountEpsilon)
-		{
-			return 0f;
-		}
-		float p = amount / capacity;
-		if (p < 0f)
-		{
-			return 0f;
-		}
-		if (p > 1f)
-		{
-			return 1f;
-		}
-		return p;
+		return FlowSolverCore.PressureFromAmount(amount, capacity);
 	}
 
 	public void SyncPressureFromAmount()

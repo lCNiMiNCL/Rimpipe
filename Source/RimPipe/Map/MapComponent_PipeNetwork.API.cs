@@ -195,7 +195,8 @@ public partial class MapComponent_PipeNetwork : MapComponent
 		}
 		return false;
 	}
-	/// </summary>
+
+	/// <summary>稳定公开 API：设置管道格或可破损构件的 breached；内部走既有 setter（会 Wake、刷 leakOpen）。</summary>
 	public bool TrySetBreached(Thing? thing, bool breached)
 	{
 		if (thing == null)

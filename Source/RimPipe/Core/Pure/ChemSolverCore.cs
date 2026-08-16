@@ -346,8 +346,7 @@ public static class ChemSolverCore
 		float n,
 		float mixRatio,
 		float efficiency,
-		List<(int
- Index, float Delta)> into,
+		List<(int Index, float Delta)> into,
 		List<float>? precomputedPerIn = null)
 	{
 		into.Clear();

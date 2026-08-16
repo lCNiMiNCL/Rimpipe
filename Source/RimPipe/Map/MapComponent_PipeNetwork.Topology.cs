@@ -153,6 +153,8 @@ public partial class MapComponent_PipeNetwork : MapComponent
 			return;
 		}
 
+		bool handled = false;
+
 		CompPipeCell? cell = thing.TryGetComp<CompPipeCell>();
 		if (cell != null)
 		{
@@ -170,7 +172,7 @@ public partial class MapComponent_PipeNetwork : MapComponent
 				}
 			}
 			// 即使该格当前没有 leakOpen，也唤醒相关网，让休眠重评重新判定。
-			return;
+			handled = true;
 		}
 
 		CompPipeBreachable? br = thing.TryGetComp<CompPipeBreachable>();
@@ -178,10 +180,13 @@ public partial class MapComponent_PipeNetwork : MapComponent
 		{
 			CompPipeNetworkMember? mem = (thing as ThingWithComps)?.GetComp<CompPipeNetworkMember>();
 			WakeMember(mem, "breach");
-			return;
+			handled = true;
 		}
 
-		NotifyBreachChanged();
+		if (!handled)
+		{
+			NotifyBreachChanged();
+		}
 	}
 
 	private static bool ShouldDumpOnDestroy(DestroyMode mode)
@@ -1162,8 +1167,6 @@ public partial class MapComponent_PipeNetwork : MapComponent
 			}
 		}
 	}
-
-	/// <summary>调试：局部重建结果 vs 强制整图重建结果的等价断言（容器对集合 + 连通域划分）。</summary>
 
 	/// <summary>
 	/// 按完整 Mapping 连通关系给每个 Container/Mapping 打 netId，并重建各网的 sleepStates。

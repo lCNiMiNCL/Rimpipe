@@ -66,8 +66,22 @@ def main():
             only_b = sorted(keys - base)
             fail(f"Keyed mismatch for {lang}: missing={only_a} extra={only_b}")
 
+    # 4. DefInjected XML well-formed + tag 指向的 DefName 必须存在于 Defs
+    for definjected_path in sorted(langs_dir.rglob("DefInjected/*.xml")):
+        try:
+            tree = ET.parse(definjected_path)
+        except ET.ParseError as e:
+            fail(f"{definjected_path.relative_to(ROOT)}: XML parse error: {e}")
+        for child in tree.getroot():
+            tag = child.tag
+            if "." not in tag:
+                continue
+            def_name = tag.split(".", 1)[0]
+            if def_name not in def_names:
+                fail(f"{definjected_path.relative_to(ROOT)}: DefInjected tag '{tag}' references missing DefName '{def_name}'")
+
     print(f"OK: {len(def_names)} defs, {len(fields)} DefOf fields, "
-          f"{len(base) if base else 0} Keyed keys, XML/DefOf/loc checks passed.")
+          f"{len(base) if base else 0} Keyed keys, XML/DefOf/Keyed/DefInjected checks passed.")
 
 if __name__ == "__main__":
     main()

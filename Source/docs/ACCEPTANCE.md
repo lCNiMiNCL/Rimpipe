@@ -284,6 +284,24 @@
 
 **状态：已游戏内确认通过：`R-全部 33/33`，Stress 重建耗时与改造前基本持平（当前日志示例：100罐/500管约 2.4–2.7ms，215构件/871管约 5.4–5.5ms）。**
 
+### 1.2af 代码审查后自检修复（待游戏回归确认）
+
+> 根据外部 code review 结果进行自检后修复，涉及运行逻辑/CI/校验/测试/文档。
+
+| 项 | 说明 |
+|----|------|
+| 死代码 | 删除 `ChemSolver.ResolveConditionContainer`（public 但未文档化、无调用方） |
+| 文档残端 | 修正 API/Debug/Batch/Topology 中 4 处 partial 拆分遗留的孤立 XML doc |
+| 公式统一 | `Container.PressureFromAmount` 委托 `FlowSolverCore.PressureFromAmount` |
+| 破损唤醒防御 | `NotifyBreachChanged(Thing)` 改为同时处理同一 Thing 上的 `CompPipeCell` 与 `CompPipeBreachable`，避免复合建筑漏唤醒 |
+| 化学分配 | `ChemSolver.BuildAmountDeltas` 不再为纯核额外 `ToStates` 分配 |
+| 校验脚本 | `validate_config.py` 增加 `DefInjected` XML 解析与 DefName 引用校验 |
+| CI | 固定 .NET SDK `8.0.100`、启用 NuGet 缓存、增加 Release 构建 |
+| 测试 | 新增 5 个边界测试：RateCap/Equalize 零粘度、出腔空位限制、出腔流体不符、mixPair 失败；单元测试总数 25→30 |
+| 文档 | CHANGELOG / RimPipe_API 0.5.1 补记工程与健壮性内容 |
+
+**状态：代码已修改，`dotnet build` 0 警告 0 错误、30 个单元测试通过；待游戏内回归确认。**
+
 ### 1.2r 阶段四 · 4.8 Bridge-A 验收复查（Player.log · 2026-07-19）
 
 | 项 | 结论 | 证据 / 备注 |

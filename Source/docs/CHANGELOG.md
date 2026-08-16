@@ -5,6 +5,7 @@
 ## 0.5.1
 - 6.19 管道 A/B 双通道（方向分组、端口 channel、Gizmo 逐向配置）。
 - 6.18 流体物理量（粘度→流动阻力、比热→传热）。
+- 工程与健壮性：MapComponent/DebugAsserts partial 拆分、Flow/Heat/Chem 纯逻辑核抽取、单元测试与 CI、配置校验脚本、R-全部、4.1-4.5 健壮性修复。
 - **无下游 API 变更**；schema 仍 1。
 
 ## 0.4.7

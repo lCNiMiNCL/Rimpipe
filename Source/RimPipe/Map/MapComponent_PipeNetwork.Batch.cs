@@ -715,7 +715,4 @@ public partial class MapComponent_PipeNetwork : MapComponent
 		return anyPipe.IsValid ? anyPipe : fallback;
 	}
 
-	/// <summary>
-	/// 低开销地按网重算休眠状态（不算 Jacobi）。名字沿用旧入口，方便 Debug 调用。
-	/// </summary>
 }

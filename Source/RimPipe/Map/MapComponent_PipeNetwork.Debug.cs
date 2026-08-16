@@ -334,9 +334,6 @@ public partial class MapComponent_PipeNetwork : MapComponent
 		ReevaluateAllNetSleepStates();
 	}
 
-	/// <summary>
-	/// 稳定公开 API：设置管道格或可破损构件的 breached；内部走既有 setter（会 Wake、刷 leakOpen）。
-
 	/// <summary>调试：设置容器温度（H-A）；薄包装 → TrySetTemperature。</summary>
 	internal void DebugSetTemperature(Container c, float temperature)
 	{

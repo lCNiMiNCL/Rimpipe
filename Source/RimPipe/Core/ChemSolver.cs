@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace RimPipe;
@@ -30,25 +31,6 @@ public static class ChemSolver
 			states.Add(ToState(list[i]));
 		}
 		return states;
-	}
-
-	/// <summary>解析条件监测腔（相对 inputs；&lt;0 → 第一入腔）。</summary>
-	public static Container? ResolveConditionContainer(PipeReactionDef reaction, IList<Container> inputs)
-	{
-		if (inputs == null || inputs.Count == 0)
-		{
-			return null;
-		}
-		int idx = reaction.conditionContainerIndex;
-		if (idx < 0)
-		{
-			idx = 0;
-		}
-		if (idx >= inputs.Count)
-		{
-			return null;
-		}
-		return inputs[idx];
 	}
 
 	/// <summary>P5a：T≥minTemperature 且 P≥minPressure；失败写出 failReason。</summary>
@@ -139,10 +121,12 @@ public static class ChemSolver
 		}
 
 		var pureDeltas = new List<(int Index, float Delta)>();
+		// BuildAmountDeltas 的纯核并不读取容器状态，只依赖 reaction 与 precomputedPerIn；
+		// 传空数组即可避免每次再 ToStates 分配两份 List。
 		ChemSolverCore.BuildAmountDeltas(
 			reaction.GetChemSpec(),
-			ToStates(inputs),
-			ToStates(outputs),
+			System.Array.Empty<ChemContainerState>(),
+			System.Array.Empty<ChemContainerState>(),
 			n,
 			mixRatio,
 			efficiency,
