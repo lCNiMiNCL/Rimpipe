@@ -133,7 +133,8 @@ public static class ChemSolver
 		float mixRatio,
 		float efficiency,
 		List<(Container c, float delta)> into,
-		List<float>? precomputedPerIn = null)
+		List<float>? precomputedPerIn = null,
+		List<(int Index, float Delta)>? pureDeltaScratch = null)
 	{
 		into.Clear();
 		if (n <= FlowSolverCore.AmountEpsilon)
@@ -141,7 +142,7 @@ public static class ChemSolver
 			return;
 		}
 
-		var pureDeltas = new List<(int Index, float Delta)>();
+		var pureDeltas = pureDeltaScratch ?? new List<(int Index, float Delta)>();
 		// BuildAmountDeltas 的纯核并不读取容器状态，只依赖 reaction 与 precomputedPerIn；
 		// 传空数组即可避免每次再 ToStates 分配两份 List。
 		ChemSolverCore.BuildAmountDeltas(

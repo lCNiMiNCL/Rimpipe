@@ -321,7 +321,7 @@
 
 | 项 | 说明 |
 |----|------|
-| 化学批处理分配 | `CommitChem` 每反应釜每批只构建一次 `ChemReactionSpec` 与容器状态快照，`ComputeBatchCount`/`BuildAmountDeltas` 复用，避免重复 `GetChemSpec`/`ToStates` |
+| 化学批处理分配 | `CommitChem` 每反应釜每批只构建一次 `ChemReactionSpec` 与容器状态快照，`ComputeBatchCount`/`BuildAmountDeltas` 复用，避免重复 `GetChemSpec`/`ToStates`；`pureDeltas` 使用 `chemPureDeltaScratch` 复用 |
 | 破损唤醒分配 | `NotifyBreachChanged` 无参与带参版本改用 `scratchBreachWokeNets` 复用 HashSet |
 | 测试补充 | 新增输入流体不符、TryGetInputPerBatch 正常路径、null reaction 等测试；单元测试总数 30→33 |
 

@@ -13,6 +13,7 @@ namespace RimPipe;
 /// </summary>
 public partial class MapComponent_PipeNetwork : MapComponent
 {
+	private readonly List<(int Index, float Delta)> chemPureDeltaScratch = new List<(int Index, float Delta)>();
 
 	/// <summary>
 	/// 批级缓存惰性重建：Busy Flow / Busy Heat 边、light Flow 边、light 构件。
@@ -329,7 +330,7 @@ public partial class MapComponent_PipeNetwork : MapComponent
 				continue;
 			}
 			ChemSolver.BuildAmountDeltas(
-				spec, b.inputs, b.outputs, n, b.mixRatio, efficiency, chemDeltaScratch, chemPerInScratch);
+				spec, b.inputs, b.outputs, n, b.mixRatio, efficiency, chemDeltaScratch, chemPerInScratch, chemPureDeltaScratch);
 			for (int d = 0; d < chemDeltaScratch.Count; d++)
 			{
 				Container c = chemDeltaScratch[d].c;
