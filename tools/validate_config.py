@@ -104,6 +104,31 @@ def main():
             only_b = sorted(keys - definjected_base)
             fail(f"DefInjected mismatch for {lang}: missing={only_a} extra={only_b}")
 
+    # 5. 核心数据封装守卫：运行时核心类不允许出现 public 可变字段（只读属性允许）。
+    core_data_files = [
+        "Source/RimPipe/Core/Container.cs",
+        "Source/RimPipe/Core/Mapping.cs",
+        "Source/RimPipe/Core/Port.cs",
+        "Source/RimPipe/Core/ChemReactorBinding.cs",
+        "Source/RimPipe/Comps/CompPipeNetworkMember.cs",
+    ]
+    public_field_pattern = re.compile(
+        r"^\s*public\s+"
+        r"(?!(?:const|static|readonly|override|partial|class|interface|enum|struct|sealed|abstract)\s)"
+        r"[A-Za-z0-9_<>,.?\[\]]+\s+(\w+)\s*"
+        r"(?:=\s*(?!>)[^=]+|;)\s*$"
+    )
+    bad_public_fields = []
+    for rel in core_data_files:
+        core_path = ROOT / rel
+        if not core_path.exists():
+            fail(f"missing {rel}")
+        for line_no, line in enumerate(core_path.read_text(encoding="utf-8").splitlines(), 1):
+            if public_field_pattern.match(line):
+                bad_public_fields.append(f"{rel}:{line_no}: {line.strip()}")
+    if bad_public_fields:
+        fail("core data encapsulation: public mutable fields found:\n" + "\n".join(bad_public_fields))
+
     print(f"OK: {len(def_names)} defs, {len(fields)} DefOf fields, "
           f"{len(base) if base else 0} Keyed keys, "
           f"{len(definjected_base) if definjected_base else 0} DefInjected tags across {len(definjected_sets)} lang(s), "

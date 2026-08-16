@@ -13,7 +13,7 @@
 - **回归套件：** R-框架 / R-物理 / R-热与环境 / R-化学 / R-扩展 / R-通道 / R-全部。
 - **调试工具：** 当前 DevMode 菜单包含 11 个工具 + 7 个套件（含 `R-全部`，共 18 项）。
 - **延后项：** Bridge-H（Harmony 注入）、R2 工坊公开包装、正式反应釜产品化、自有美术。
-- **阶段 2（重构）partial 拆分已完成：** `MapComponent_PipeNetwork` 已拆为 partial（Topology / Mapping / Batch / Sleep / API / Debug）；`RimPipeDebugAsserts` 已按套件拆为 partial；`Debug*` 已降为 `internal`。游戏内验证见 `docs/ACCEPTANCE.md` §1.2v；核心数据封装与死代码清理已在 0.6.0 实现，待游戏内验收。
+- **阶段 2（重构）partial 拆分已完成：** `MapComponent_PipeNetwork` 已拆为 partial（Topology / Mapping / Batch / Sleep / API / Debug）；`RimPipeDebugAsserts` 已按套件拆为 partial；`Debug*` 已降为 `internal`。游戏内验证见 `docs/ACCEPTANCE.md` §1.2v；核心数据封装与死代码清理已在 0.6.0 实现并通过游戏内验收（§1.2al）。
 - **阶段 3（自动化测试与 CI）已完成：** 已新增 `Source/RimPipe.Tests`，并抽出 `FlowSolverCore` / `HeatSolverCore` / `ChemSolverCore` 纯逻辑核；25 个单元测试通过；XML/DefOf/本地化校验与 CI 已就绪；`R-全部` 已游戏内确认 **33/33**；`ChemSolver` 已接入纯核并确认通过。
 - **阶段 4（健壮性与性能）已完成：** 旧档容器按 Props 补齐、破损标志局部化、`NotifyBreachChanged(Thing)` 精确唤醒、泵/阀/换热器/反应釜下标保护统一、拓扑重建分配优化均已完成并游戏内确认通过。
 

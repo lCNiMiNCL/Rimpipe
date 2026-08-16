@@ -398,19 +398,22 @@
 
 **总判：第四轮自检优化验收通过**（Player.log · 2026-08-17；玩家确认）。
 
-### 1.2al 0.6.0 阶段 2 重构遗留实现（本地验证 · 游戏验收待补）
+### 1.2al 0.6.0 阶段 2 重构遗留实现验收（Player.log · 2026-08-17）
 
 > 加载 DLL：0.6.0
-> 本轮实现：核心数据封装 + 死代码清理。尚未进行游戏内 R-全部 验收。
+> Player.log：`C:/Users/12135/AppData/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios/Player.log`
+> 本轮实现：核心数据封装 + 死代码清理。已通过游戏内回归与存读档验证。
 
-| 项 | 说明 |
-|----|------|
-| 死代码清理 | 删除 `ContainerDelta` 与 `ReevaluateSleepState()`；`MappingType.Chemical` 保留为预留占位 |
-| 核心数据封装 | `Container` / `Mapping` / `Port` / `ChemReactorBinding` 运行时字段改为只读属性；`CompPipeNetworkMember.Containers` / `Ports` 改为 `IReadOnlyList` |
-| 本地验证 | Release 构建 0 警告 / 0 错误；43/43 单测通过；`validate_config.py` 通过；committed DLL 与 Release 一致 |
-| 待补 | 游戏内 `R-全部` 33/33；存读档后再跑 `R-全部` 33/33 |
+| 项 | 结论 | 证据 / 备注 |
+|----|------|-------------|
+| 新游戏 R-全部 | ✅ | `R-全部：通过 33/33`；框架 9/9、物理 7/7、热与环境 6/6、化学 5/5、扩展 2/2、通道 4/4 |
+| 读档后 R-全部 | ✅ | `Loading game from file TestPipe` 后再次 `R-全部：通过 33/33` |
+| 死代码清理 | ✅ | 删除 `ContainerDelta` 与 `ReevaluateSleepState()`；`MappingType.Chemical` 保留为预留占位 |
+| 核心数据封装 | ✅ | `Container` / `Mapping` / `Port` / `ChemReactorBinding` 运行时字段改为只读属性；`CompPipeNetworkMember.Containers` / `Ports` 改为 `IReadOnlyList` |
+| 无崩溃 / Exception | ✅ | 本段无 Exception / Config error / `RimPipe…失败` / NaN / 负量日志 |
+| 工程校验 | ✅ | Release 构建 0 警告 / 0 错误；43/43 单测通过；`validate_config.py` 通过；committed DLL 与 Release 一致 |
 
-**状态：实现与本地工程验证完成，游戏内验收待玩家执行。**
+**总判：0.6.0 阶段 2 重构遗留实现验收通过**（Player.log · 2026-08-17；玩家确认）。
 
 ### 1.2r 阶段四 · 4.8 Bridge-A 验收复查（Player.log · 2026-07-19）
 
