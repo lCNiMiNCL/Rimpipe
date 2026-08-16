@@ -25,9 +25,20 @@ RimPipe 是 RimWorld 1.6 的流体管道框架模组，基于容器–端口–�
 - **化学：** `PipeReactionDef` + `CompPipeReactor`（或运行时 `TryRegisterChemReactor`）支持多入多出反应、空燃比、温度/压力门槛、反应热
 - **破损桥接：** 伤害/Breakdown 自动触发 `breached`，修满血后可清除（无 Harmony）
 - **扩展接口：** `IPipeInternalMappingContributor` 登记同建筑内部 Mapping；`TrySetAmount` / `TrySetTemperature` / `TrySetBreached` 等运行时 API
-- **DevMode 工具：** Overlay（压色 + 上批流量边线）、Benchmark / Stress 计时、5 套回归测试套件（R-框架 / R-物理 / R-热与环境 / R-化学 / R-扩展 + R-通道）
+- **DevMode 工具：** Overlay（压色 + 上批流量边线）、Benchmark / Stress 计时、6 套回归测试套件（R-框架 / R-物理 / R-热与环境 / R-化学 / R-扩展 / R-通道）
 
 > 管道格本身不存流体，流体量都在设备/管件的 `Container` 里。
+
+---
+
+## 文档导航
+
+- **路线与任务：** [`Source/docs/ROADMAP.md`](Source/docs/ROADMAP.md)
+- **架构与锁定决议：** [`Source/docs/ARCHITECTURE.md`](Source/docs/ARCHITECTURE.md)
+- **验收记录：** [`Source/docs/ACCEPTANCE.md`](Source/docs/ACCEPTANCE.md)
+- **版本记录：** [`Source/docs/CHANGELOG.md`](Source/docs/CHANGELOG.md)
+- **总索引：** [`Source/RimPipe_TODO.md`](Source/RimPipe_TODO.md)
+- **下游 API：** [`Source/RimPipe_API.md`](Source/RimPipe_API.md)
 
 ---
 
@@ -54,7 +65,7 @@ RimPipe 是 RimWorld 1.6 的流体管道框架模组，基于容器–端口–�
 | `Defs/` | 流体 / 建筑 / 反应 / 分类 |
 | `Languages/` | 简中 Keyed + 英文 DefInjected / Keyed |
 
-`Source/`（C# 源码 + 文档）、`LICENSE`、`README.md`、`CONTRIBUTING.md` 属于仓库内容，游戏加载时不强制要求。
+`Source/`（C# 源码 + API/索引文档）、`Source/docs/`（路线/架构/验收/版本记录）、`LICENSE`、`README.md`、`CONTRIBUTING.md` 属于仓库内容，游戏加载时不强制要求。
 
 ---
 

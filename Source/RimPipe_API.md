@@ -5,7 +5,7 @@
 
 **packageId：** `rimpipe.core` · **游戏：** RimWorld **1.6** · **存档 schema：** **1**（玩法稳定面以 **0.4.0** 对内冻结为准）
 
-计划与决议细节以 `Source/RimPipe_TODO.md` 为准。
+计划与决议细节见 [`docs/ROADMAP.md`](docs/ROADMAP.md) 与 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)；`Source/RimPipe_TODO.md` 为总索引。
 
 ---
 
@@ -27,7 +27,7 @@
 | 本版可依赖（0.5.x） | 延后 / 勿当稳定承诺 |
 |--------------------|---------------------|
 | FluidDef；标准 NetworkMember / PipeCell / 阀·泵·换热器 / Reactor 的 XML Comp | Bridge-H（Harmony 强行注入、无引用也能挂） |
-| `IPipeInternalMappingContributor`（**只**登记同建筑内部 Mapping） | DirtyTopo（局部脏区重建，内部实现，非下游 API） |
+| `IPipeInternalMappingContributor`（**只**登记同建筑内部 Mapping） | DirtyTopo 等内部实现，不构成下游 API |
 | `TrySetAmount` / `TryAddAmount` / `TrySetTemperature` | 通用「把直接相邻外部边改成 Forced」API |
 | `TrySetBreached` / `TryGetBreached`；伤害/Breakdown 自动破损 | 正式建造栏反应釜产品化、B0 混管 |
 | `TryRegisterChemReactor` 等；只读 Members / Mappings / ChemReactors / Sleep | 自有美术定稿；工坊 R2 包装 |
@@ -49,14 +49,14 @@
 | 路径 | 用途 |
 |------|------|
 | `Source/RimPipe_API.md` | 本文件（下游说明） |
-| `Source/RimPipe_TODO.md` | 计划与决议 |
+| `docs/ROADMAP.md` / `docs/ARCHITECTURE.md` | 计划与决议 |
 | `Source/RimPipe/` | C# 源码 |
 
 一般**不必**打进玩家包：`Source/RimPipe/obj/`、`Source/Libs/` 下的本地引用 dll（按你们工程约定即可）。
 
 ### 0.4 冻结回归（记录）
 
-清单见 `RimPipe_TODO.md` **§7.12.8**（Debug 套件）或 **§7.11.8**（旧逐步键）：对称、泵、Bridge×3、休眠、化学、存读档。  
+清单见 [`docs/ACCEPTANCE.md`](docs/ACCEPTANCE.md)（Debug 套件与旧逐步键）：对称、泵、Bridge×3、休眠、化学、存读档。  
 通过记录：**§1.2s**（✅ 2026-07-20 · R1）；**§1.2t**（✅ 2026-07-20 · 4.12 Debug 整理 · 五套件满分）。
 
 ### 0.5 版本短记
@@ -66,7 +66,7 @@
 | **0.5.1** | 6.19 管道 A/B 双通道（方向分组、端口 channel、Gizmo 逐向配置）；6.18 流体物理量（粘度→流动阻力、比热→传热）。**无下游 API 变更**；schema 仍 1 |
 | **0.4.7** | DirtyTopo 局部脏区拓扑重建（放/拆管道不再整图重建）。**无下游 API 变更** |
 | **0.4.4–0.4.6** | 批级优化、休眠重评估单遍聚合、代码审查修复、批级缓存。**无下游 API 变更**；schema 仍 1 |
-| **0.4.3** | Debug：拓扑重建 Stopwatch（日志 `耗时=…ms`）+ Stress 一键场景 +「计时整图重建」；菜单 14 键。**无下游 API 变更**；不启动 DirtyTopo |
+| **0.4.3** | Debug：拓扑重建 Stopwatch（日志 `耗时=…ms`）+ Stress 一键场景 +「计时整图重建」。**无下游 API 变更**；当时 DirtyTopo 尚未启动 |
 | **0.4.2** | DevMode Overlay 性能：弃每帧 `FlashCell`，改 `CellRenderer` + 近距 OnGUI `P=`（内部调试绘制，不影响下游 API） |
 | **0.4.1** | Debug 菜单收成 12 键（7 工具 + 5 回归套件）；旧「断言* / 生成*」退出菜单；断言误报硬化。**勿依赖**旧 Debug 菜单项名称 |
 | **0.4.0** | 对内冻结：阶段四收官口径；稳定面 + 交付说明合并进本文 |
@@ -278,7 +278,7 @@ net.TryGetBreached(thing, out bool breached);
 | `PipeReactionDef` + Reactor 或 `TryRegisterChemReactor` | 用二元 `MappingType.Chemical` 做多入多出 |
 | 实现 `IPipeInternalMappingContributor` 登记内部边 | 强迫产品必须带 CompBreakdownable |
 
-存档 schema 细则见 `RimPipe_TODO.md` §7.5（SaveMig）。化学反应决议见 §6.17。破损桥接见 §7.8。
+存档 schema 细则见 `docs/ARCHITECTURE.md`（SaveMig）。化学反应决议见 `docs/ARCHITECTURE.md` §6.17。破损桥接见 `docs/ARCHITECTURE.md` §7.8。
 
 ---
 

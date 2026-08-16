@@ -28,13 +28,13 @@
 
 ## 计划与决议
 
-项目没有独立的 `docs/plans/` 工作流，所有目标、架构决议、阶段大纲和任务清单都集中在 [`Source/RimPipe_TODO.md`](Source/RimPipe_TODO.md)。提交前确认改动符合文档里的「已锁定」决议；如果文档没覆盖，且改动会影响字段 / 公式 / 存档，停下来问一下再动手，不要自行发明。
+项目文档已拆分到 `Source/docs/`：当前目标与任务看 [`Source/docs/ROADMAP.md`](Source/docs/ROADMAP.md)，架构与锁定决议看 [`Source/docs/ARCHITECTURE.md`](Source/docs/ARCHITECTURE.md)，验收记录看 [`Source/docs/ACCEPTANCE.md`](Source/docs/ACCEPTANCE.md)，版本记录看 [`Source/docs/CHANGELOG.md`](Source/docs/CHANGELOG.md)。`Source/RimPipe_TODO.md` 只保留为总索引。提交前确认改动符合 `Source/docs/ARCHITECTURE.md` 里的「已锁定」决议；如果文档没覆盖，且改动会影响字段 / 公式 / 存档，停下来问一下再动手，不要自行发明。
 
 ## PR 流程
 
 1. **先开 Issue：** 新功能或修 bug 先开 Issue 讨论，避免做完被驳回
 2. **分支：** 从 `main` 拉特性分支（如 `feat/xxx`、`fix/yyy`），不要直接推 `main`
 3. **提交信息：** 用中文写清楚「做了什么 + 为什么」，参考既有 commit 风格（一句话主题行 + 空行 + 详细说明）
-4. **验收：** 涉及运行时行为变更的 PR，在 DevMode 下跑过 5 套回归套件（R-框架 / R-物理 / R-热与环境 / R-化学 / R-扩展 + R-通道），并在 PR 描述里贴日志关键行
+4. **验收：** 涉及运行时行为变更的 PR，在 DevMode 下跑过 6 套回归套件（R-框架 / R-物理 / R-热与环境 / R-化学 / R-扩展 / R-通道），并在 PR 描述里贴日志关键行
 5. **不破坏存档：** 不要擅自升级存档 schema；新增字段必须带默认值，旧档读入要能退化到旧行为
 6. **代码卫生：** 运行时资源文件（XML Defs、DefInjected、Languages/Keyed、Patches、About.xml、LoadFolders.xml）只放运行时内容，不夹带开发元数据（CR 编号、TODO 标记、审查状态、计划引用）
