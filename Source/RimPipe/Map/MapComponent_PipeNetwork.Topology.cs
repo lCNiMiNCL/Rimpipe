@@ -28,6 +28,11 @@ public partial class MapComponent_PipeNetwork : MapComponent
 	private readonly HashSet<(IntVec3 cell, int channel)> scratchReconnectSeen = new HashSet<(IntVec3 cell, int channel)>();
 	private readonly HashSet<(Container, Container)> scratchRecovered = new HashSet<(Container, Container)>();
 	private readonly HashSet<Container> scratchSeedContainers = new HashSet<Container>();
+	private readonly List<HashSet<Container>> scratchNetDomains = new List<HashSet<Container>>();
+	private readonly HashSet<Container> scratchNetVisited = new HashSet<Container>();
+	private readonly Queue<Container> scratchNetQueue = new Queue<Container>();
+	private readonly HashSet<int> scratchNetUsedThisPass = new HashSet<int>();
+	private readonly HashSet<Container> scratchNetAllAffected = new HashSet<Container>();
 
 	public void RegisterMember(CompPipeNetworkMember comp, bool respawningAfterLoad)
 	{
@@ -1068,8 +1073,10 @@ public partial class MapComponent_PipeNetwork : MapComponent
 	private void ReassignNetworkIdsIncremental(HashSet<Container> seedContainers)
 	{
 		// 1) 从 seed 沿当前全局 mappings 做 BFS 收集连通域
-		List<HashSet<Container>> domains = new List<HashSet<Container>>();
-		HashSet<Container> visited = new HashSet<Container>();
+		List<HashSet<Container>> domains = scratchNetDomains;
+		scratchNetDomains.Clear();
+		HashSet<Container> visited = scratchNetVisited;
+		scratchNetVisited.Clear();
 		foreach (Container seed in seedContainers)
 		{
 			if (seed == null || visited.Contains(seed))
@@ -1077,7 +1084,8 @@ public partial class MapComponent_PipeNetwork : MapComponent
 				continue;
 			}
 			HashSet<Container> domain = new HashSet<Container>();
-			Queue<Container> q = new Queue<Container>();
+			Queue<Container> q = scratchNetQueue;
+			scratchNetQueue.Clear();
 			q.Enqueue(seed);
 			visited.Add(seed);
 			domain.Add(seed);
@@ -1117,7 +1125,8 @@ public partial class MapComponent_PipeNetwork : MapComponent
 		}
 
 		// 2) 分配 id：域优先复用「域内容器原 netId 中最小有效值且未被本次其他域占用」；否则新 id=netCount++
-		HashSet<int> usedThisPass = new HashSet<int>();
+		HashSet<int> usedThisPass = scratchNetUsedThisPass;
+		scratchNetUsedThisPass.Clear();
 		for (int d = 0; d < domains.Count; d++)
 		{
 			HashSet<Container> domain = domains[d];
@@ -1146,7 +1155,8 @@ public partial class MapComponent_PipeNetwork : MapComponent
 		}
 
 		// 3) 同步 Mapping.netId：两端任一属于受影响域 → 用该容器 netId
-		HashSet<Container> allAffected = new HashSet<Container>();
+		HashSet<Container> allAffected = scratchNetAllAffected;
+		scratchNetAllAffected.Clear();
 		for (int d = 0; d < domains.Count; d++)
 		{
 			foreach (Container c in domains[d])

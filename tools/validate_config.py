@@ -18,6 +18,8 @@ def fail(msg):
 def main():
     # 1. XML well-formed + collect defNames
     defs_dir = ROOT / "Defs"
+    if not defs_dir.exists():
+        fail("Defs/ directory not found")
     def_names = set()
     for xml_path in sorted(defs_dir.rglob("*.xml")):
         try:
@@ -35,13 +37,15 @@ def main():
     if not defof_path.exists():
         fail(f"missing {defof_path.relative_to(ROOT)}")
     text = defof_path.read_text(encoding="utf-8")
-    fields = re.findall(r'public static\s+\w+\s+(\w+)\s*=', text)
+    fields = re.findall(r'public static\s+[A-Za-z0-9_.<>\[\],\?]+\s+(\w+)\s*(?:=|;)', text)
     missing = [name for name in fields if name not in def_names]
     if missing:
         fail(f"RimPipeDefOf references missing in Defs: {missing}")
 
     # 3. Keyed localization key sets equal
     langs_dir = ROOT / "Languages"
+    if not langs_dir.exists():
+        fail("Languages/ directory not found")
     key_sets = {}
     for keyed_path in sorted(langs_dir.rglob("Keyed/*.xml")):
         try:
@@ -55,8 +59,9 @@ def main():
         lang = keyed_path.parent.parent.name
         key_sets[lang] = keys
 
-    if len(key_sets) < 2:
-        fail("expected at least ChineseSimplified and English Keyed files")
+    required_langs = {"ChineseSimplified", "English"}
+    if not required_langs.issubset(key_sets.keys()):
+        fail(f"expected ChineseSimplified and English Keyed files, got {sorted(key_sets.keys())}")
     base = None
     for lang, keys in key_sets.items():
         if base is None:
