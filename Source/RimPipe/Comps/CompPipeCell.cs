@@ -42,7 +42,7 @@ public class CompPipeCell : ThingComp
 			breached = value;
 			if (parent.Spawned)
 			{
-				parent.Map.GetComponent<MapComponent_PipeNetwork>()?.NotifyBreachChanged();
+				parent.Map.GetComponent<MapComponent_PipeNetwork>()?.NotifyBreachChanged(parent);
 			}
 		}
 	}

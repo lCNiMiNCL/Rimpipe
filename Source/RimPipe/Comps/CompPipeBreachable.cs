@@ -27,9 +27,7 @@ public class CompPipeBreachable : ThingComp
 			breached = value;
 			if (parent.Spawned)
 			{
-				MapComponent_PipeNetwork? net = parent.Map.GetComponent<MapComponent_PipeNetwork>();
-				CompPipeNetworkMember? mem = parent.GetComp<CompPipeNetworkMember>();
-				net?.WakeMember(mem, "tankBreach");
+				parent.Map.GetComponent<MapComponent_PipeNetwork>()?.NotifyBreachChanged(parent);
 			}
 		}
 	}

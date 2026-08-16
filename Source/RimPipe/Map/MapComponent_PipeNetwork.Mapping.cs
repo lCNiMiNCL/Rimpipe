@@ -13,7 +13,7 @@ namespace RimPipe;
 /// </summary>
 public partial class MapComponent_PipeNetwork : MapComponent
 {
-	/// <summary>由 CompPipeCell.breached 重刷路径 Mapping.leakOpen。</summary>
+	/// <summary>由 CompPipeCell.breached 重刷路径 Mapping.leakOpen（全量版本，供整图重建/兼容调用）。</summary>
 	private void ApplyBreachLeakFlags()
 	{
 		for (int i = 0; i < mappings.Count; i++)
@@ -36,6 +36,42 @@ public partial class MapComponent_PipeNetwork : MapComponent
 			{
 				list[j].leakOpen = true;
 			}
+		}
+	}
+
+	/// <summary>局部版本：只重算某一管道格关联的 Mapping.leakOpen，不扫描全图。</summary>
+	private void ApplyBreachLeakFlagsForCell(IntVec3 cell)
+	{
+		if (!cellToMapping.TryGetValue(cell, out List<Mapping>? list) || list == null)
+		{
+			return;
+		}
+		for (int j = 0; j < list.Count; j++)
+		{
+			Mapping m = list[j];
+			if (m == null)
+			{
+				continue;
+			}
+			bool leak = false;
+			if (m.attachedBuildings != null)
+			{
+				for (int k = 0; k < m.attachedBuildings.Count; k++)
+				{
+					Building? b = m.attachedBuildings[k];
+					if (b == null || !b.Spawned)
+					{
+						continue;
+					}
+					CompPipeCell? pc = b.TryGetComp<CompPipeCell>();
+					if (pc != null && pc.Breached)
+					{
+						leak = true;
+						break;
+					}
+				}
+			}
+			m.leakOpen = leak;
 		}
 	}
 

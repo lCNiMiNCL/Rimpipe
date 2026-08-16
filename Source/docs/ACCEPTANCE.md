@@ -234,6 +234,18 @@
 
 **状态：已游戏内确认：`R-化学：通过 5/5`，`R-全部：通过 33/33`。**
 
+### 1.2ab 阶段 4 · 4.1/4.2 破损局部化与精确唤醒实现（待游戏验证）
+
+> 实现记录，尚未进行游戏内回归验证。
+
+| 项 | 说明 |
+|----|------|
+| 4.1 破损标志局部化 | 新增 `ApplyBreachLeakFlagsForCell(IntVec3)`，只重算某一管道格关联 Mapping 的 `leakOpen`，不再全图扫描 |
+| 4.2 精确唤醒 | 新增 `NotifyBreachChanged(Thing)`；`CompPipeCell` / `CompPipeBreachable` 切换破损时改为传入具体 Thing，只唤醒相关 net 或所属构件网；无参版本保留作 fallback |
+| 兼容性 | `RebuildAllMappings` 仍使用全量 `ApplyBreachLeakFlags()`；第三方无参调用仍可用 |
+
+**状态：代码已实现，`dotnet build` 0 警告 0 错误；待游戏内回归确认。**
+
 ### 1.2r 阶段四 · 4.8 Bridge-A 验收复查（Player.log · 2026-07-19）
 
 | 项 | 结论 | 证据 / 备注 |

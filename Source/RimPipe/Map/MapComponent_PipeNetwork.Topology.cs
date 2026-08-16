@@ -126,6 +126,49 @@ public partial class MapComponent_PipeNetwork : MapComponent
 		}
 	}
 
+	/// <summary>
+	/// 局部版本：由 Comp 在切换破损时传入具体 Thing，只刷新该管道格关联 Mapping 并唤醒相关网；
+	/// 若是储罐破损则只唤醒该建筑所属网。
+	/// </summary>
+	public void NotifyBreachChanged(Thing thing)
+	{
+		if (thing == null || !thing.Spawned)
+		{
+			NotifyBreachChanged();
+			return;
+		}
+
+		CompPipeCell? cell = thing.TryGetComp<CompPipeCell>();
+		if (cell != null)
+		{
+			ApplyBreachLeakFlagsForCell(thing.Position);
+			HashSet<int> woke = new HashSet<int>();
+			if (cellToMapping.TryGetValue(thing.Position, out List<Mapping>? list) && list != null)
+			{
+				for (int i = 0; i < list.Count; i++)
+				{
+					Mapping m = list[i];
+					if (m != null && m.netId >= 0 && woke.Add(m.netId))
+					{
+						WakeNet(m.netId, "breach");
+					}
+				}
+			}
+			// 即使该格当前没有 leakOpen，也唤醒相关网，让休眠重评重新判定。
+			return;
+		}
+
+		CompPipeBreachable? br = thing.TryGetComp<CompPipeBreachable>();
+		if (br != null)
+		{
+			CompPipeNetworkMember? mem = (thing as ThingWithComps)?.GetComp<CompPipeNetworkMember>();
+			WakeMember(mem, "breach");
+			return;
+		}
+
+		NotifyBreachChanged();
+	}
+
 	private static bool ShouldDumpOnDestroy(DestroyMode mode)
 	{
 		if (RimPipeMod.Settings == null || !RimPipeMod.Settings.dumpOnDestroy)
