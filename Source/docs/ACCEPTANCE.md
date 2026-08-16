@@ -365,7 +365,7 @@
 
 | 项 | 说明 |
 |----|------|
-| CI committed DLL 伪阳性 | `Build RimPipe (Release)` 改为输出到 `RUNNER_TEMP/rimpipe_release`，不再覆盖 `Assemblies/RimPipe.dll`，确保后续 committed DLL 校验比对的是 checkout 原始文件 |
+| CI committed DLL 伪阳性 | `Build RimPipe (Debug)` 与 `Build RimPipe (Release)` 均改为输出到 `RUNNER_TEMP/rimpipe_debug` / `rimpipe_release`，不再覆盖 `Assemblies/RimPipe.dll`，确保后续 committed DLL 校验比对的是 checkout 原始文件 |
 | deterministic 验证 | deterministic 两次构建改为 `-t:Rebuild`，强制重新编译，避免共享 obj 时第二次命中增量缓存 |
 | csproj deterministic | 新增 `<DeterministicSourcePaths>true</DeterministicSourcePaths>` 与 `<ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>` |
 | 本地脚本 | `verify-deterministic.ps1` 同步改为 `-t:Rebuild` |

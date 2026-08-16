@@ -32,7 +32,7 @@ jobs:
           python-version: '3.12'
 
       - name: Build RimPipe (Debug)
-        run: dotnet build Source/RimPipe/RimPipe.csproj --configuration Debug -v:minimal
+        run: dotnet build Source/RimPipe/RimPipe.csproj --configuration Debug -v:minimal -p:OutputPath=$env:RUNNER_TEMP/rimpipe_debug -p:AppendTargetFrameworkToOutputPath=false
 
       - name: Build RimPipe (Release)
         run: dotnet build Source/RimPipe/RimPipe.csproj --configuration Release -v:minimal -p:OutputPath=$env:RUNNER_TEMP/rimpipe_release -p:AppendTargetFrameworkToOutputPath=false
