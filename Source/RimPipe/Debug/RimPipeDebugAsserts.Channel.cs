@@ -41,13 +41,18 @@ internal static partial class RimPipeDebugAsserts
 		center = null;
 		east = west = north = south = null;
 		// A={E,W}=bit1|bit3=0b1010；B={N,S}=bit0|bit2=0b0101
+		// 必须取最新场景：存读档后旧场景的 Port.channel 会按 Props 重建而丢失 B 通道运行时修改，
+		// 若仍选中旧格会误报 NS=False。
 		for (int i = 0; i < net.PipeCells.Count; i++)
 		{
 			CompPipeCell p = net.PipeCells[i];
-			if (p != null && p.groupAMask == 0b1010u && p.groupBMask == 0b0101u)
+			if (p == null || p.parent == null || p.groupAMask != 0b1010u || p.groupBMask != 0b0101u)
+			{
+				continue;
+			}
+			if (center == null || p.parent.thingIDNumber > center.parent.thingIDNumber)
 			{
 				center = p;
-				break;
 			}
 		}
 		if (center == null || center.parent == null)
