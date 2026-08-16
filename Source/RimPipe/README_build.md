@@ -47,6 +47,20 @@ python ..\..\tools\validate_config.py
 - 测试工程只链接 `Source/RimPipe/Core/Pure/` 下的纯逻辑源码，不依赖游戏 DLL。
 - CI 使用 `windows-latest`，依次执行：build RimPipe → dotnet test → XML/DefOf/本地化校验。
 
+## DLL 提交约定
+
+- 代码提交不要混入 DLL；DLL 由单独提交承载。
+- 提交前使用固定 SDK 重建：
+  ```bat
+  powershell -ExecutionPolicy Bypass -File ..\\..\\tools\\rebuild-dll.ps1
+  ```
+  或
+  ```bat
+  dotnet build ..\..\Source\RimPipe\RimPipe.csproj -c Release
+  ```
+- CI 会执行 deterministic 校验：同一配置连续构建两次，确认 DLL 哈希一致。
+- 若 committed DLL 与 CI 构建产物不一致，应先用上述脚本重建后再单独提交 DLL。
+
 ## 怎么编译
 
 
