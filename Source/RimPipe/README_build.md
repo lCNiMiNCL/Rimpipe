@@ -54,6 +54,7 @@ CI 固定安装 `8.0.100`；本地若没有该版本，会自动使用已安装�
 
 ## DLL 提交约定
 
+- Release 配置使用 `DebugType=none` / `DebugSymbols=false`，保证 DLL 不因输出路径/PDB 路径不同而产生字节差异。
 - 代码提交不要混入 DLL；DLL 由单独提交承载。
 - 提交前使用固定 SDK 重建：
   ```bat
