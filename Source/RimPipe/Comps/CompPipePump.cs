@@ -154,12 +154,18 @@ public class CompPipePump : ThingComp, IPipeInternalMappingContributor
 			return;
 		}
 		CompPipeNetworkMember? member = parent.GetComp<CompPipeNetworkMember>();
-		if (member == null)
+		if (member == null
+			|| !MapComponent_PipeNetwork.TryResolveContainers(
+				member,
+				Props.containerIndexA,
+				Props.containerIndexB,
+				"泵",
+				out Container? inlet,
+				out Container? outlet)
+			|| inlet == null || outlet == null)
 		{
 			return;
 		}
-		Container inlet = member.Containers[Props.containerIndexA];
-		Container outlet = member.Containers[Props.containerIndexB];
 		if (!Props.forcedFromA)
 		{
 			(inlet, outlet) = (outlet, inlet);
@@ -204,13 +210,18 @@ public class CompPipePump : ThingComp, IPipeInternalMappingContributor
 			return;
 		}
 		CompPipeNetworkMember? member = parent.GetComp<CompPipeNetworkMember>();
-		if (member == null || member.Containers.Count <= Props.containerIndexA
-			|| member.Containers.Count <= Props.containerIndexB)
+		if (member == null
+			|| !MapComponent_PipeNetwork.TryResolveContainers(
+				member,
+				Props.containerIndexA,
+				Props.containerIndexB,
+				"泵",
+				out Container? inlet,
+				out Container? outlet)
+			|| inlet == null || outlet == null)
 		{
 			return;
 		}
-		Container inlet = member.Containers[Props.containerIndexA];
-		Container outlet = member.Containers[Props.containerIndexB];
 
 		// 重收邻接边：丢弃已删的陈旧 Mapping，纳入本次局部重建新建的边
 		adjacentExternalMappings.Clear();

@@ -246,6 +246,19 @@
 
 **状态：已游戏内确认通过：`R-物理 7/7`、`R-框架 9/9`、`R-全部 33/33`，存读档无异常。**
 
+### 1.2ac 阶段 4 · 4.3 下标保护统一实现（待游戏验证）
+
+> 实现记录，尚未进行游戏内回归验证。
+
+| 项 | 说明 |
+|----|------|
+| 新增辅助 | `MapComponent_PipeNetwork.TryResolveContainer(member, index, label, out container)`，供单容器设备统一安全解析 |
+| 泵 | `ApplyDriveToConnectedMappings` / `RefreshAdjacentMappingsAfterLocalRebuild` 改为 `TryResolveContainers`，避免直接下标访问 |
+| 反应釜 | `TryResolveSlots` 改为 `TryResolveContainer` 解析入/出腔，越界统一返回 false |
+| 审计 | 阀 / 换热器 / DevInternalBridge 已确认使用 `TryResolveContainers`，无遗漏直接下标访问 |
+
+**状态：代码已实现，`dotnet build` 0 警告 0 错误；待游戏内回归确认。**
+
 ### 1.2r 阶段四 · 4.8 Bridge-A 验收复查（Player.log · 2026-07-19）
 
 | 项 | 结论 | 证据 / 备注 |

@@ -194,20 +194,20 @@ public class CompPipeReactor : ThingComp
 		for (int i = 0; i < inIdx.Count; i++)
 		{
 			int idx = inIdx[i];
-			if (idx < 0 || idx >= mem.Containers.Count)
+			if (!MapComponent_PipeNetwork.TryResolveContainer(mem, idx, "反应釜", out Container? c) || c == null)
 			{
 				return false;
 			}
-			inputs.Add(mem.Containers[idx]);
+			inputs.Add(c);
 		}
 		for (int i = 0; i < outIdx.Count; i++)
 		{
 			int idx = outIdx[i];
-			if (idx < 0 || idx >= mem.Containers.Count)
+			if (!MapComponent_PipeNetwork.TryResolveContainer(mem, idx, "反应釜", out Container? c) || c == null)
 			{
 				return false;
 			}
-			outputs.Add(mem.Containers[idx]);
+			outputs.Add(c);
 		}
 		return true;
 	}

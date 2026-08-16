@@ -139,6 +139,27 @@ public partial class MapComponent_PipeNetwork : MapComponent
 		return true;
 	}
 
+	/// <summary>单容器安全解析：供反应釜等按下标读取容器时统一防御越界。</summary>
+	public static bool TryResolveContainer(
+		CompPipeNetworkMember? member,
+		int index,
+		string label,
+		out Container? container)
+	{
+		container = null;
+		if (member == null || member.parent == null || !member.parent.Spawned)
+		{
+			return false;
+		}
+		if (index < 0 || index >= member.Containers.Count)
+		{
+			Log.Error($"[RimPipe] {label} {member.parent.LabelCap} 容器索引越界 index={index} count={member.Containers.Count}");
+			return false;
+		}
+		container = member.Containers[index];
+		return true;
+	}
+
 	/// <summary>同建筑内部 Mapping（阀 / 泵 / 换热器）。rate 与 drive / type 由调用方给定。</summary>
 	public Mapping? AddInternalMapping(
 		Container? ca,
