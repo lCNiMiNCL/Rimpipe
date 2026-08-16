@@ -311,17 +311,25 @@ public partial class MapComponent_PipeNetwork : MapComponent
 		for (int i = 0; i < chemReactors.Count; i++)
 		{
 			ChemReactorBinding b = chemReactors[i];
+			if (b.reaction == null)
+			{
+				continue;
+			}
+			// 每个反应釜每批只构建一次纯 spec 与容器状态快照，避免 ComputeBatchCount/BuildAmountDeltas 重复分配。
+			ChemReactionSpec spec = b.reaction.GetChemSpec();
+			List<ChemContainerState> inputStates = ChemSolver.ToStates(b.inputs);
+			List<ChemContainerState> outputStates = ChemSolver.ToStates(b.outputs);
 			float n = ChemSolver.ComputeBatchCount(
-				b.reaction, b.inputs, b.outputs, b.enabled, b.mixRatio,
+				spec, inputStates, outputStates, b.enabled, b.mixRatio,
 				out float efficiency, out _, chemPerInScratch);
 			b.lastBatchN = n;
 			b.lastEfficiency = efficiency;
-			if (n <= FlowSolver.AmountEpsilon || b.reaction == null)
+			if (n <= FlowSolver.AmountEpsilon)
 			{
 				continue;
 			}
 			ChemSolver.BuildAmountDeltas(
-				b.reaction, b.inputs, b.outputs, n, b.mixRatio, efficiency, chemDeltaScratch, chemPerInScratch);
+				spec, b.inputs, b.outputs, n, b.mixRatio, efficiency, chemDeltaScratch, chemPerInScratch);
 			for (int d = 0; d < chemDeltaScratch.Count; d++)
 			{
 				Container c = chemDeltaScratch[d].c;

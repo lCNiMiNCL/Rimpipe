@@ -19,7 +19,7 @@ public static class ChemSolver
 			c?.temperature ?? 0f);
 	}
 
-	private static List<ChemContainerState> ToStates(IList<Container>? list)
+	internal static List<ChemContainerState> ToStates(IList<Container>? list)
 	{
 		var states = new List<ChemContainerState>(list?.Count ?? 0);
 		if (list == null)
@@ -92,6 +92,27 @@ public static class ChemSolver
 			perInOut);
 	}
 
+	internal static float ComputeBatchCount(
+		ChemReactionSpec spec,
+		IReadOnlyList<ChemContainerState> inputStates,
+		IReadOnlyList<ChemContainerState> outputStates,
+		bool enabled,
+		float mixRatio,
+		out float efficiency,
+		out string? failReason,
+		List<float>? perInOut = null)
+	{
+		return ChemSolverCore.ComputeBatchCount(
+			spec,
+			inputStates,
+			outputStates,
+			enabled,
+			mixRatio,
+			out efficiency,
+			out failReason,
+			perInOut);
+	}
+
 	/// <summary>兼容：用配方默认 mix，忽略效率细节调用方。</summary>
 	public static float ComputeBatchCount(
 		PipeReactionDef? reaction,
@@ -104,8 +125,8 @@ public static class ChemSolver
 		return ComputeBatchCount(reaction, inputs, outputs, enabled, mix, out _, out failReason);
 	}
 
-	public static void BuildAmountDeltas(
-		PipeReactionDef reaction,
+	internal static void BuildAmountDeltas(
+		ChemReactionSpec spec,
 		IList<Container> inputs,
 		IList<Container> outputs,
 		float n,
@@ -124,7 +145,7 @@ public static class ChemSolver
 		// BuildAmountDeltas 的纯核并不读取容器状态，只依赖 reaction 与 precomputedPerIn；
 		// 传空数组即可避免每次再 ToStates 分配两份 List。
 		ChemSolverCore.BuildAmountDeltas(
-			reaction.GetChemSpec(),
+			spec,
 			System.Array.Empty<ChemContainerState>(),
 			System.Array.Empty<ChemContainerState>(),
 			n,
@@ -147,5 +168,18 @@ public static class ChemSolver
 				into.Add((outputs[outIndex], delta));
 			}
 		}
+	}
+
+	public static void BuildAmountDeltas(
+		PipeReactionDef reaction,
+		IList<Container> inputs,
+		IList<Container> outputs,
+		float n,
+		float mixRatio,
+		float efficiency,
+		List<(Container c, float delta)> into,
+		List<float>? precomputedPerIn = null)
+	{
+		BuildAmountDeltas(reaction.GetChemSpec(), inputs, outputs, n, mixRatio, efficiency, into, precomputedPerIn);
 	}
 }

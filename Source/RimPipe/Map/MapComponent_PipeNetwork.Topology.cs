@@ -33,6 +33,7 @@ public partial class MapComponent_PipeNetwork : MapComponent
 	private readonly Queue<Container> scratchNetQueue = new Queue<Container>();
 	private readonly HashSet<int> scratchNetUsedThisPass = new HashSet<int>();
 	private readonly HashSet<Container> scratchNetAllAffected = new HashSet<Container>();
+	private readonly HashSet<int> scratchBreachWokeNets = new HashSet<int>();
 
 	public void RegisterMember(CompPipeNetworkMember comp, bool respawningAfterLoad)
 	{
@@ -118,7 +119,8 @@ public partial class MapComponent_PipeNetwork : MapComponent
 	public void NotifyBreachChanged()
 	{
 		ApplyBreachLeakFlags();
-		HashSet<int> woke = new HashSet<int>();
+		HashSet<int> woke = scratchBreachWokeNets;
+		scratchBreachWokeNets.Clear();
 		for (int i = 0; i < mappings.Count; i++)
 		{
 			Mapping m = mappings[i];
@@ -164,7 +166,8 @@ public partial class MapComponent_PipeNetwork : MapComponent
 		if (cell != null)
 		{
 			ApplyBreachLeakFlagsForCell(thing.Position);
-			HashSet<int> woke = new HashSet<int>();
+			HashSet<int> woke = scratchBreachWokeNets;
+			scratchBreachWokeNets.Clear();
 			if (cellToMapping.TryGetValue(thing.Position, out List<Mapping>? list) && list != null)
 			{
 				for (int i = 0; i < list.Count; i++)

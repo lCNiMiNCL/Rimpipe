@@ -314,6 +314,17 @@
 
 **状态：已游戏内确认通过：`R-全部 33/33`，局部等价与存读档正常。**
 
+### 1.2ai 第三轮代码优化（待游戏回归确认）
+
+> 继续减少热路径分配，并提升化学批处理效率。
+
+| 项 | 说明 |
+|----|------|
+| 化学批处理分配 | `CommitChem` 每反应釜每批只构建一次 `ChemReactionSpec` 与容器状态快照，`ComputeBatchCount`/`BuildAmountDeltas` 复用，避免重复 `GetChemSpec`/`ToStates` |
+| 破损唤醒分配 | `NotifyBreachChanged` 无参与带参版本改用 `scratchBreachWokeNets` 复用 HashSet |
+
+**状态：代码已修改，`dotnet build` 0 警告 0 错误、30 个单元测试通过；待游戏内回归确认。**
+
 ### 1.2ah DLL 可复现构建工程（CI 待验证）
 
 > 处理代码审查中的 DLL 可复现性问题。
