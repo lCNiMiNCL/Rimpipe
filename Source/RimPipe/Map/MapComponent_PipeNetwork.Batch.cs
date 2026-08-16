@@ -385,11 +385,13 @@ public partial class MapComponent_PipeNetwork : MapComponent
 		{
 			mem = b.inputs[0]?.owner;
 		}
-		if (mem == null || rx.heatTargetContainerIndex >= mem.Containers.Count)
+		if (mem == null
+			|| !TryResolveContainer(mem, rx.heatTargetContainerIndex, "反应釜热目标", out Container? c)
+			|| c == null)
 		{
 			return b.outputs.Count > 0 ? b.outputs[0] : null;
 		}
-		return mem.Containers[rx.heatTargetContainerIndex];
+		return c;
 	}
 
 	private static int IndexOfContainer(List<Container> list, Container c)
