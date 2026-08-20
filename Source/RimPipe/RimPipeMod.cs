@@ -1,3 +1,4 @@
+using HarmonyLib;
 using UnityEngine;
 using Verse;
 
@@ -7,10 +8,13 @@ public sealed class RimPipeMod : Mod
 {
 	public static RimPipeSettings Settings = null!;
 
+	private static readonly Harmony HarmonyInstance = new Harmony("rimpipe.core");
+
 	public RimPipeMod(ModContentPack content) : base(content)
 	{
 		Settings = GetSettings<RimPipeSettings>();
-		Log.Message("[RimPipe] Framework loaded (1.6).");
+		HarmonyInstance.PatchAll();
+		Log.Message("[RimPipe] Framework loaded (1.6). Bridge-H ready.");
 	}
 
 	public override string SettingsCategory()

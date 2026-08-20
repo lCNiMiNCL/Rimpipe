@@ -21,6 +21,7 @@ public static class RimPipeDefOf
 	public static ThingDef RimPipe_Dev_Pipe = null!;
 	public static ThingDef RimPipe_Dev_InternalBridge = null!;
 	public static ThingDef RimPipe_Dev_Reactor = null!;
+	public static ThingDef RimPipe_Dev_BridgeHTarget = null!;
 	public static ThingDef RimPipe_StorageTank = null!;
 	public static ThingDef RimPipe_TeeJunction = null!;
 	public static ThingDef RimPipe_Pipe = null!;

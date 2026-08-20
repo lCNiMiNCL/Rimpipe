@@ -246,6 +246,28 @@ public static class RimPipeDebugSuites
 				passed++;
 			}
 
+			RimPipeDebugScenes.SpawnBridgeHScene(map, origin + new IntVec3(0, 0, 12));
+			total++;
+			if (RimPipeDebugAsserts.AssertBridgeHInjected())
+			{
+				passed++;
+			}
+			total++;
+			if (RimPipeDebugAsserts.AssertBridgeHDamageBreach())
+			{
+				passed++;
+			}
+			total++;
+			if (RimPipeDebugAsserts.AssertBridgeHBreakdownBreach())
+			{
+				passed++;
+			}
+			total++;
+			if (RimPipeDebugAsserts.AssertBridgeHRepairClearsBreach())
+			{
+				passed++;
+			}
+
 			RimPipeDebugScenes.SpawnSplitNetSleepScene(map, origin + new IntVec3(0, 0, 6));
 			total++;
 			if (RimPipeDebugAsserts.AssertSplitNetSleep())

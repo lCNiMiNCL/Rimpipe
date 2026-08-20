@@ -20,7 +20,7 @@
 - **可空：** `<Nullable>enable</Nullable>`——新增公共 API 注意 nullability 标注
 - **命名空间：** `RimPipe`（根）；子目录用子命名空间（如 `RimPipe.Comps`、`RimPipe.Core`）
 - **风格对齐：** 跟随既有代码——`sealed` 类优先、必填字段用 `null!` 初始化、能写 expression-bodied 就写
-- **不引入 Harmony：** 当前阶段 Bridge-H 延后，除非另有决议，PR 里不要引入 Harmony 依赖
+- **Harmony 仅限 Bridge-H：** Harmony 依赖固定在 `Source/Libs/0Harmony/0Harmony.dll`，只在 Bridge-H（§7.9）范围内使用；非 Bridge-H 改动不要新增 Harmony patch 或依赖
 - **不破坏架构约束：**
   - 不要新增 `Node` / `Connection` / `PipeLine` 类名
   - 管道格不储存流体（量只在设备/管件的 `Container`）

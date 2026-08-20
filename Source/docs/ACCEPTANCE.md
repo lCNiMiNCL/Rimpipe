@@ -415,6 +415,25 @@
 
 **总判：0.6.0 阶段 2 重构遗留实现验收通过**（Player.log · 2026-08-17；玩家确认）。
 
+### 1.2am Bridge-H 0.7.0 验收（Player.log · 2026-08-20）
+
+> 加载 DLL：0.7.0
+> Player.log：`C:/Users/12135/AppData/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios/Player.log`
+> 本轮实现：`PipeBridgeInjectDef` + `PipeBridgeInjector`，向已有 NetworkMember 的目标 Def 注入 `CompPipeBreachable`。
+
+| 项 | 结论 | 证据 / 备注 |
+|----|------|-------------|
+| 注入生效 | ✅ | `[RimPipe] Bridge-H: 已向 RimPipe_Dev_BridgeHTarget 注入 CompPipeBreachable。` |
+| 注入存在断言 | ✅ | `BridgeHInjected通过：Rimpipe 测试注入目标 def.comps 含 CompProperties_PipeBreachable，运行时 Comp 存在。` |
+| 伤害破损 | ✅ | `BridgeH伤害破损通过：Rimpipe 测试注入目标 (40%) HP=40/100 breached=True` |
+| Breakdown | ✅ | `BridgeH故障破损通过：Rimpipe 测试注入目标 signal=Breakdown` |
+| 满血清 | ✅ | `BridgeH满血清通过：Rimpipe 测试注入目标 HP=100/100 breached=False` |
+| R-扩展 | ✅ | `R-扩展：通过 6/6` |
+| R-全部 | ✅ | `R-全部：通过 37/37` |
+| 无崩溃 / Exception | ✅ | 本段无 Exception / Config error / `RimPipe…失败` |
+
+**总判：Bridge-H 0.7.0 验收通过**（Player.log · 2026-08-20）。
+
 ### 1.2r 阶段四 · 4.8 Bridge-A 验收复查（Player.log · 2026-07-19）
 
 > 加载 DLL：0.5.1
@@ -626,7 +645,7 @@
 | 4.6 Loc | Defs 中文基线 + 英 DefInjected；Core 研究门槛（暂无自研树） | ✅ 验收通过（§1.2o） |
 | 4.7 ExtHook | `IPipeInternalMappingContributor` + 扫描；Dev 桥自测 | ✅ 验收通过（§1.2p） |
 | 4.8 Bridge-A | 伤害/Breakdown→breached；TrySetBreached；无 Harmony | ✅ 验收通过（§1.2r） |
-| 4.9 Bridge-H | Def 注入无引用建筑（Harmony） | `[!]` 延后（§7.9） |
+| 4.9 Bridge-H | Def 注入无引用建筑（Harmony） | `[x]` 0.7.0 验收通过（§7.9 / §1.2am） |
 | 4.10 DirtyTopo | 局部脏区拓扑 | `[!]` 延后；先 Benchmark（§7.10） |
 | 4.11 R1 | 对内冻结 `0.4.0`；下游说明并入 `RimPipe_API.md` | ✅ 验收通过（§1.2s） |
 | 4.12 Debug | 菜单 12 键 + 套件 + 断言硬化；`0.4.1` | ✅ 验收通过（§1.2t） |
@@ -671,6 +690,7 @@ Defs/         Fluids, DesignationCategories,
 - [x] 4.8 Bridge-A：`Bridge伤害破损通过`；`Bridge故障破损通过`；`Bridge满血清通过`；无 Exception（§1.2r；本段未重跑对称/泵）  
 - [x] 4.11 R1：`对称通过`；`泵逆均分通过`；Bridge×3；`休眠进入/唤醒通过`；化学热/条件/L1/釜阻断；误报失败与缺存读档日志行不影响（§1.2s）  
 - [x] 4.12 Debug：`R-框架 8/8`；`R-物理 7/7`；`R-热与环境 6/6`；`R-化学 5/5`；`R-扩展 2/2`；中段摧毁停漏偶发 6/7 不影响（§1.2t）  
+- [x] Bridge-H（0.7.0）：生成 Bridge-H 注入验收场景 → `BridgeHInjected通过` / `BridgeH伤害破损通过` / `BridgeH故障破损通过` / `BridgeH满血清通过`；`R-扩展 6/6`、`R-全部 37/37`；存读档后注入 Comp 的 breached 状态正常（§1.2am · Player.log · 2026-08-20）
 
 ---
 

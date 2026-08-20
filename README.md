@@ -5,7 +5,7 @@ RimPipe 是 RimWorld 1.6 的流体管道框架模组，基于容器–端口–�
 > **English summary:** RimPipe is a fluid pipeline framework mod for RimWorld 1.6. It implements a Container / Port / Mapping model with pressure equalization, heat exchange, chemical reactions, breach leakage, and per-network sleep. Downstream mods can depend on `rimpipe.core` and extend it via `FluidDef`, `PipeReactionDef`, and `IPipeInternalMappingContributor`. See [`Source/RimPipe_API.md`](Source/RimPipe_API.md) for the full downstream API.
 
 - **作者 / 维护者：** NewFrontierTeam
-- **当前版本：** 0.6.0
+- **当前版本：** 0.7.0
 - **支持游戏版本：** RimWorld 1.6
 - **packageId：** `rimpipe.core`
 - **存档 schema：** 1（稳定面以 0.4.0 对内冻结为准）
@@ -23,7 +23,7 @@ RimPipe 是 RimWorld 1.6 的流体管道框架模组，基于容器–端口–�
 - **流体物理量：** `FluidDef.viscosity`（粘度→流动阻力）、`specificHeat`（比热→传热）；v=c=1 时退化为旧行为
 - **A/B 双通道：** 管道 4 个方向可逐向配置 A/B 通道，格内同组互连、跨组隔离；端口可指定 channel
 - **化学：** `PipeReactionDef` + `CompPipeReactor`（或运行时 `TryRegisterChemReactor`）支持多入多出反应、空燃比、温度/压力门槛、反应热
-- **破损桥接：** 伤害/Breakdown 自动触发 `breached`，修满血后可清除（无 Harmony）
+- **破损桥接：** Bridge-A 伤害/Breakdown 自动触发 `breached`，修满血后可清除（无 Harmony）；Bridge-H 可对“已有 NetworkMember 但无 Breachable”的第三方建筑用 `PipeBridgeInjectDef` 注入破损能力（需 Harmony）
 - **扩展接口：** `IPipeInternalMappingContributor` 登记同建筑内部 Mapping；`TrySetAmount` / `TrySetTemperature` / `TrySetBreached` 等运行时 API
 - **DevMode 工具：** Overlay（压色 + 上批流量边线）、Benchmark / Stress 计时、6 套回归测试套件（R-框架 / R-物理 / R-热与环境 / R-化学 / R-扩展 / R-通道）
 
@@ -53,7 +53,7 @@ RimPipe 是 RimWorld 1.6 的流体管道框架模组，基于容器–端口–�
 ### 依赖
 
 - **必需：** RimWorld 1.6
-- **运行时无前置：** 不需要 Harmony 或其他前置 mod（仓库 `Source/Libs/0Harmony/` 只是为后续阶段预留，当前未引用）
+- **运行时前置：** RimWorld 1.6 + `brrainz.harmony`（Harmony 仅用于 Bridge-H；Bridge-A 等核心功能不需要）
 - **下游模组：** 通过 C# 引用 RimPipe.dll 时，在 About.xml 里 `loadAfter` `rimpipe.core`，引用 `Assemblies/RimPipe.dll` 并设 `Private=false`
 
 ### 运行时需要的文件

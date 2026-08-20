@@ -827,4 +827,41 @@ internal static class RimPipeDebugScenes
 			$"高比热腔(c={cold.fluid.specificHeat}) T={cold.temperature} 开={hxComp?.IsOpen}");
 		Messages.Message("[RimPipe] 比热验收场景已生成（换热器两腔 c=1 vs c=2）。", MessageTypeDefOf.TaskCompletion, historical: false);
 	}
+	/// <summary>Bridge-H 注入验收场景：左罐 — BridgeH 目标（动态注入 Breachable）— 右罐。</summary>
+	internal static void SpawnBridgeHScene(Map map, IntVec3 origin)
+	{
+		IntVec3 targetPos = origin;
+		IntVec3 tankL = origin + IntVec3.West;
+		IntVec3 tankR = origin + IntVec3.East;
+
+		RimPipeDebugUtil.DestroyAt(map, tankL);
+		RimPipeDebugUtil.DestroyAt(map, targetPos);
+		RimPipeDebugUtil.DestroyAt(map, tankR);
+
+		Building target = (Building)GenSpawn.Spawn(RimPipeDefOf.RimPipe_Dev_BridgeHTarget, targetPos, map, Rot4.North);
+		Building left = (Building)GenSpawn.Spawn(RimPipeDefOf.RimPipe_StorageTank, tankL, map, Rot4.North);
+		Building right = (Building)GenSpawn.Spawn(RimPipeDefOf.RimPipe_StorageTank, tankR, map, Rot4.North);
+
+		MapComponent_PipeNetwork net = map.GetComponent<MapComponent_PipeNetwork>();
+		CompPipeNetworkMember cl = left.GetComp<CompPipeNetworkMember>();
+		CompPipeNetworkMember cr = right.GetComp<CompPipeNetworkMember>();
+		CompPipeNetworkMember ct = target.GetComp<CompPipeNetworkMember>();
+		FluidDef fluid = RimPipeDefOf.RimPipe_Fluid_TestWater;
+		cl.Containers[0].fluid = fluid;
+		cr.Containers[0].fluid = fluid;
+		ct.Containers[0].fluid = fluid;
+		net.DebugFillContainer(cl.Containers[0], 0.8f);
+		net.DebugFillContainer(cr.Containers[0], 0f);
+		net.DebugFillContainer(ct.Containers[0], 0f);
+
+		CompPipeBreachable? br = target.GetComp<CompPipeBreachable>();
+
+		net.RequestFullRebuild();
+		net.DebugProcessTopology();
+		Log.Message(
+			$"[RimPipe] Bridge-H 场景 @ {origin} 注入Breachable={(br != null)} " +
+			$"左={cl.Containers[0].amount} 通={ct.Containers[0].amount} 右={cr.Containers[0].amount}");
+		Messages.Message("[RimPipe] Bridge-H 注入验收场景已生成。", MessageTypeDefOf.TaskCompletion, historical: false);
+	}
+
 }

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Defs>
+
+  <!-- Bridge-H 自测注入：给 RimPipe_Dev_BridgeHTarget 动态补 CompPipeBreachable。 -->
+  <RimPipe.PipeBridgeInjectDef>
+    <defName>RimPipe_BridgeH_DevInject</defName>
+    <label>Bridge-H Dev 注入</label>
+    <targetThingDef>RimPipe_Dev_BridgeHTarget</targetThingDef>
+    <injectComps>
+      <li Class="RimPipe.CompProperties_PipeBreachable" />
+    </injectComps>
+  </RimPipe.PipeBridgeInjectDef>
+
+</Defs>

@@ -462,7 +462,7 @@ want  = min(maxFlowRate, amountSrc, freeDst)
 ### 6.11 阶段三后续 · 候选与建议下一动作（2026-07-14 · 6.17 修订）
 
 > **原则不变：** 单项启动；先公式/存档决议再编码；不并行改驱动与拓扑。  
-> **已锁定：** **管道不储存流体**（§6.14）；**热量 H-A ✅**；**Amb-A ✅**；阶段四 4.1–4.8 ✅；**4.9/4.10 延后**（§7.9 / §7.10）；**3.8 Chem ✅**（§6.17 / §1.2q）。
+> **已锁定：** **管道不储存流体**（§6.14）；**热量 H-A ✅**；**Amb-A ✅**；阶段四 4.1–4.8 ✅；**4.9 Bridge-H 已完成**（§7.9）；**4.10 DirtyTopo 已完成**（§7.10 / 0.4.7）；**3.8 Chem ✅**（§6.17 / §1.2q）。
 
 | 优先 | ID / 主题 | 挂点 | 改动面 | 建议 |
 |------|-----------|------|--------|------|
@@ -480,12 +480,12 @@ want  = min(maxFlowRate, amountSrc, freeDst)
 | ~~1~~ | ~~**4.7 ExtHook**~~ | — | — | ✅ §1.2p |
 | ~~1~~ | ~~**3.8 化学 Chem**~~ | — | — | ✅ §1.2q（P0–P6） |
 | **1** | **4.8 Bridge-A** | §7.8 | Comp 伤害/Breakdown→breached；TrySetBreached；无 Harmony | ✅ §1.2r |
-| — | （延后）Bridge-H | — | §7.9 | `[!]` 已决议延后 |
-| — | （延后）DirtyTopo | — | §7.10 | `[!]` 已决议延后；**先 Benchmark 再决定** |
+| ~~1~~ | ~~Bridge-H~~ | §7.9 | Harmony 依赖 + `PipeBridgeInjectDef` 注入 Breachable | ✅ 0.7.0 验收通过 |
+| ~~—~~ | ~~（延后）DirtyTopo~~ | — | §7.10 | ✅ 0.4.7 已实现 |
 | **1** | **4.11 发布准备 R1** | §7.11 | `0.4.0` 冻结 + `RimPipe_API.md`（含原 RELEASE）+ 回归（含化学） | ✅ §1.2s |
 | ~~1~~ | ~~**4.12 Debug 整理**~~ | — | — | ✅ §1.2t |
 
-**下一动作：** 手测 B3 已完成（§7.10.8）；批级优化 ✅；休眠评估聚合 ✅；代码审查 8 项 ✅；可选 R2 / Bridge-H（§7.9）/ 玩法功能；DirtyTopo 维持延后（重建 2.489ms < 门槛）。
+**下一动作：** 手测 B3 已完成（§7.10.8）；批级优化 ✅；休眠评估聚合 ✅；代码审查 8 项 ✅；**Bridge-H 已完成（§7.9）**；可选 R2 / 玩法功能；DirtyTopo 维持延后决策但本体已完成（§7.10.12）。
 
 ### 6.12 决议：泄漏效果 — E-A（已锁定 · 2026-07-14）
 
@@ -1099,8 +1099,8 @@ want  = min(maxFlowRate, amountSrc, freeDst)
 | **4.6** | **研究与本地化 — Loc** | `[x]` 验收通过（§1.2o） |
 | **4.7** | **ExtHook — `IPipeInternalMappingContributor`** | `[x]` 验收通过（§1.2p） |
 | **4.8** | **Bridge-A — 伤害/Breakdown→破损 + 公开 API** | `[x]` 验收通过（§1.2r） |
-| **4.9** | **Bridge-H — Def 注入（Harmony）** | `[!]` 已决议延后（§7.9） |
-| **4.10** | **DirtyTopo — 局部脏区拓扑** | `[!]` 已决议延后（§7.10；先 Benchmark） |
+| **4.9** | **Bridge-H — Def 注入（Harmony）** | `[x]` 0.7.0 验收通过（§7.9） |
+| **4.10** | **DirtyTopo — 局部脏区拓扑** | `[x]` 0.4.7 已实现并验收（§7.10.12） |
 | **4.11** | **发布准备 — R1** | `[x]` 验收通过（§1.2s · `0.4.0`） |
 | **4.12** | **Debug 测试整理** | `[x]` 验收通过（§1.2t · `0.4.1`） |
 
@@ -1461,7 +1461,7 @@ want  = min(maxFlowRate, amountSrc, freeDst)
 | 主题 | 备注 |
 |------|------|
 | Bridge-A | ✅ 见 §7.8（伤害/Breakdown→破损；无 Harmony） |
-| Bridge-H | ✅ 见 §7.9（已决议 · 延后） |
+| Bridge-H | ✅ 见 §7.9（已决议 · 已完成） |
 | DirtyTopo | ✅ 见 §7.10（已决议 · 延后；先 Benchmark） |
 
 #### 7.7.4 任务清单
@@ -1504,7 +1504,7 @@ want  = min(maxFlowRate, amountSrc, freeDst)
 | 项 | 决议 |
 |----|------|
 | 模型 | **Bridge-A**：世界事件 → `breached`；公开 `TrySetBreached` |
-| Harmony | **不引入**（Harmony 注入 = Bridge-H 延后） |
+| Harmony | Bridge-H 实施起引入（§7.9）；其他扩展仍不引入 |
 | 公式 / 拓扑 / Flow / 休眠 | **不改** |
 | 存档 | **不新增**字段；仍用既有 `breached`；schema 仍 1 |
 | 作用对象 | 管道格 `CompPipeCell` + 储罐等 `CompPipeBreachable` |
@@ -1524,7 +1524,7 @@ want  = min(maxFlowRate, amountSrc, freeDst)
 
 | 主题 | 备注 |
 |------|------|
-| Bridge-H | ✅ 见 §7.9（已决议 · 延后） |
+| Bridge-H | ✅ 见 §7.9（已决议 · 已完成） |
 | DirtyTopo | ✅ 见 §7.10（已决议 · 延后；先 Benchmark） |
 | 产品 Breakdownable | 玩法需要时再挂官方 Comp |
 
@@ -1560,10 +1560,11 @@ want  = min(maxFlowRate, amountSrc, freeDst)
 
 ---
 
-### 7.9 决议：4.9 跨模桥接 — Bridge-H（已锁定 · 2026-07-19 · 延后）
+### 7.9 决议：4.9 跨模桥接 — Bridge-H（已锁定 · 2026-07-19 · 已完成）
 
-> **决议：** 已讨论并锁定范围；**暂不实施**（无硬需求）。  
-> **记录本决议以备将来启动。**
+> **决议：** 已讨论并锁定范围；早期因无硬需求**暂不实施**，2026-08 起进入实施。
+>
+> **记录本决议；实施细节见 §7.9.5。**
 
 #### 7.9.1 问题
 
@@ -1576,9 +1577,10 @@ Bridge-H：他模**不引用** RimPipe、停更或不知情时，RimPipe 侧通�
 - 实际场景少：主动适配的模组用 Bridge-A 即可；Bridge-H 面向停更模组
 - 对热门管线模组（PipeSystem / VFE 管道等）如作者活跃，应优先推动桥接引用而非反复注入
 
-#### 7.9.3 执行方案（将来）
+#### 7.9.3 执行方案（已完成）
 
-**启动条件：** 有确定的、停更的、包含 NetworkMember 类建筑的第三方模组，且玩家有适配需求。
+**启动条件（历史）：** 有确定的、停更的、包含 NetworkMember 类建筑的第三方模组，且玩家有适配需求。
+**2026-08 决策：** 项目直接实施 Bridge-H 基础设施；对外仍建议优先推动 Bridge-A / 引用式适配。
 
 **技术路径（已选取）：**
 
@@ -1603,14 +1605,31 @@ Bridge-H：他模**不引用** RimPipe、停更或不知情时，RimPipe 侧通�
 - 目标无 `CompPipeNetworkMember` → 跳过 + Log.Warning（不注入空壳 Breachable）
 - 注入 Comp class 不存在 → Config error（XML 类级校验）
 
-#### 7.9.4 任务清单（全部延后）
+#### 7.9.4 任务清单（已完成）
 
-- [ ] 7.9.a 引入 Harmony 依赖（csproj + About + `RimPipeMod`）
-- [ ] 7.9.b `PipeBridgeInjectDef` + Def应用器
-- [ ] 7.9.c Dev 自测 Def + Debug 场景/断言
-- [ ] 7.9.d `RimPipe_API.md` 写 InjectDef 用法
-- [ ] 7.9.e About bump + Release
-- [ ] 7.9.f 游戏内验收
+- [x] 7.9.a 引入 Harmony 依赖（csproj + About + `RimPipeMod`）
+- [x] 7.9.b `PipeBridgeInjectDef` + Def应用器
+- [x] 7.9.c Dev 自测 Def + Debug 场景/断言
+- [x] 7.9.d `RimPipe_API.md` 写 InjectDef 用法
+- [x] 7.9.e About bump + Release
+- [x] 7.9.f 游戏内验收
+
+#### 7.9.5 实施规划（2026-08）
+
+| 子项 | 内容 | 状态 |
+|------|------|------|
+| 7.9.a | csproj 引用 `Libs\0Harmony\0Harmony.dll`（`Private=false`）；About 增加 `modDependencies` / `loadAfter` → `brrainz.harmony`；`RimPipeMod` 初始化 `Harmony("rimpipe.core")` | ✅ |
+| 7.9.b | 新增 `PipeBridgeInjectDef`（`targetThingDef` + `injectComps`）与 `PipeBridgeInjector`（DefsLoaded 后扫描并注入）；只注入 `CompPipeBreachable`，跳过缺目标/无 NetworkMember 的 Def 并 Warning | ✅ |
+| 7.9.c | 新增 Dev 目标 `RimPipe_Dev_BridgeHTarget`（有 NetworkMember 无 Breachable）+ 注入 Def + Debug 场景/断言，并把 Bridge-H 断言并入 R-扩展 | ✅ |
+| 7.9.d | `RimPipe_API.md` 增加 `PipeBridgeInjectDef` XML 用法；更新能力边界 | ✅ |
+| 7.9.e | About bump 到 0.7.0；CHANGELOG 记录；重建并提交 Release DLL | ✅ |
+| 7.9.f | 游戏内跑 R-扩展 / R-全部、存读档，验收后写入 `ACCEPTANCE.md` | ✅ 0.7.0 验收通过（R-全部 37/37） |
+
+**实现约束：**
+- 注入范围仅 `CompPipeBreachable`；不注入全 NetworkMember 模板，不做具名他模适配（H2）。
+- 公式 / 拓扑 / Flow / 存档 schema 不改。
+- 注入后 `breached` 仍走既有 `CompPipeBreachable` 存档字段。
+- 若 `ThingDef.comps` 修改后 RimWorld 需要刷新缓存，须在应用器里补等价刷新调用。
 
 ---
 
@@ -1677,8 +1696,8 @@ B1–B2 **已编码**；B3 为手测流程。**不等于**启动 DirtyTopo 编�
 
 - [x] 7.10.a 写入本节 / 更新 §6.11 / §七表头 / §九
 - [x] 7.10.b（可选）Benchmark + Stress Debug（§7.10.4 · `0.4.3`）
-- [ ] 7.10.c DirtyTopo 本体编码（**仅当 §7.10.3 满足**）
-- [ ] 7.10.d 全套回归 + 验收
+- [x] 7.10.c DirtyTopo 本体编码（**仅当 §7.10.3 满足**；0.4.7 已实现）
+- [x] 7.10.d 全套回归 + 验收（§7.10.12 · 0.4.7）
 - [x] 7.10.e 写入 MapComponentTick 峰值研究笔记（§7.10.7 · 2026-07-20）
 
 #### 7.10.7 观测笔记：MapComponentTick 平均低 / 峰值高（2026-07-20）
@@ -1841,7 +1860,7 @@ B1–B2 **已编码**；B3 为手测流程。**不等于**启动 DirtyTopo 编�
 | 交付说明 | **`Source/RimPipe_API.md`**（版本交付 + 用法；原 RELEASE 已合并） |
 | 回归 | P3 全套 **+ 化学**（转化 / 釜 / L1 / 条件 / 反应热 至少覆盖主路径） |
 | 公式 / schema | **不改**；schema 仍 1 |
-| Bridge-H / DirtyTopo / R2 | **不做** |
+| Bridge-H / DirtyTopo / R2 | **R1 当时不做**；Bridge-H 后续已完成，DirtyTopo 已实现 |
 
 #### 7.11.2 R1 交付包
 
@@ -1855,7 +1874,7 @@ B1–B2 **已编码**；B3 为手测流程。**不等于**启动 DirtyTopo 编�
 #### 7.11.3 明确不做
 
 - R2 工坊公开、Preview、自有美术  
-- Bridge-H / DirtyTopo 本体  
+- Bridge-H / DirtyTopo 本体（R1 时未做；Bridge-H 后续已完成，DirtyTopo 已实现）
 - 正式建造栏反应釜 / B0 / 阀连续开度  
 - 改 DefName / 升 schema  
 
@@ -1903,10 +1922,10 @@ B1–B2 **已编码**；B3 为手测流程。**不等于**启动 DirtyTopo 编�
 
 ## 7.12 决议：4.12 Debug 测试整理（已锁定 · 2026-07-20）
 
-> **当前 0.6.0 菜单：** 11 个工具 + 6 个套件 = **17 项**。历史 0.4.1/0.4.3 的 12/14 键菜单见 `archive/RimPipe_TODO.full.md`。
+> **当前 0.7.0 菜单：** 13 个工具 + 7 个套件 = **20 项**。历史 0.4.1/0.4.3 的 12/14 键菜单见 `archive/RimPipe_TODO.full.md`。
 > **历史决议：** 玩家确认顶层原 **12 键**（回归套件收官）；旧断言键**退出菜单**；误报硬化**同切片**；**Dev 三通生成删除**；0.4.3 起 +2 Benchmark 键 → 14 键。
 
-### 7.12.1 顶层菜单键（当前 0.6.0）
+### 7.12.1 顶层菜单键（当前 0.7.0）
 
 | # | 名称 | 类型 | 职责 |
 |---|------|------|------|
@@ -1921,19 +1940,22 @@ B1–B2 **已编码**；B3 为手测流程。**不等于**启动 DirtyTopo 编�
 | 9 | 生成 Stress 管网 | ToolMap | ~100 罐 / ~500 管 |
 | 10 | 局部≈整图等价断言 | Action | DirtyTopo 局部/整图等价验证 |
 | 11 | 环路拆段回归断言 | Action | DirtyTopo 环路重连验证 |
-| 12 | R-框架 | ToolMap | 休眠进入/唤醒 + 三通对称 + Bridge×3 + 泵逆均分/阻断 |
-| 13 | R-物理 | ToolMap | 压力 + 阻力 + 破损泄漏/摧毁停漏 + Filth/水温 |
-| 14 | R-热与环境 | ToolMap | 换热器 + 混温 + Amb |
-| 15 | R-化学 | ToolMap | P3 釜 + L1 + 条件 + 反应热 + 阻断 |
-| 16 | R-扩展 | ToolMap | ExtHook + 分网休眠 |
-| 17 | R-通道 | ToolMap | 十字隔离 / 断开恢复 / 粘度 / 比热 |
+| 12 | 生成 Bridge-H 注入验收场景 | ToolMap | 左罐—注入目标—右罐 |
+| 13 | 断言 Bridge-H 注入 | Action | 注入存在 + 伤害/故障/满血 |
+| 14 | R-框架 | ToolMap | 休眠进入/唤醒 + 三通对称 + Bridge×3 + 泵逆均分/阻断 |
+| 15 | R-物理 | ToolMap | 压力 + 阻力 + 破损泄漏/摧毁停漏 + Filth/水温 |
+| 16 | R-热与环境 | ToolMap | 换热器 + 混温 + Amb |
+| 17 | R-化学 | ToolMap | P3 釜 + L1 + 条件 + 反应热 + 阻断 |
+| 18 | R-扩展 | ToolMap | ExtHook + Bridge-H×4 + 分网休眠 |
+| 19 | R-通道 | ToolMap | 十字隔离 / 断开恢复 / 粘度 / 比热 |
+| 20 | R-全部 | ToolMap | 顺序跑 R-框架→R-物理→R-热与环境→R-化学→R-扩展→R-通道，汇总 37 项 |
 
 ### 7.12.2 代码布局
 
 | 文件 | 内容 |
 |------|------|
-| `Debug/RimPipeDebugTools.cs` | 键 1–11 |
-| `Debug/RimPipeDebugSuites.cs` | 键 12–17 |
+| `Debug/RimPipeDebugTools.cs` | 键 1–13 |
+| `Debug/RimPipeDebugSuites.cs` | 键 14–20 |
 | `Debug/RimPipeDebugScenes.cs` | Spawn*（无菜单；无 Dev 三通） |
 | `Debug/RimPipeDebugAsserts.cs` | Assert* → `bool`（无菜单） |
 | `Debug/RimPipeDebugUtil.cs` | DestroyAt / Def 分类 / ReportSuite |

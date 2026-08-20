@@ -26,6 +26,11 @@ internal static class RimPipeDebugUtil
 		return def == RimPipeDefOf.RimPipe_Dev_Pipe || def == RimPipeDefOf.RimPipe_Pipe;
 	}
 
+	internal static bool IsBridgeHTargetDef(ThingDef def)
+	{
+		return def == RimPipeDefOf.RimPipe_Dev_BridgeHTarget;
+	}
+
 	internal static bool AreAdjacentCardinal(IntVec3 a, IntVec3 b)
 	{
 		int dx = System.Math.Abs(a.x - b.x);
@@ -64,7 +69,8 @@ internal static class RimPipeDebugUtil
 			if (IsTankDef(t.def) || IsTeeDef(t.def) || IsPipeDef(t.def) || t.def == RimPipeDefOf.RimPipe_Valve
 			    || t.def == RimPipeDefOf.RimPipe_Pump || t.def == RimPipeDefOf.RimPipe_HeatExchanger
 			    || t.def == RimPipeDefOf.RimPipe_Dev_InternalBridge
-			    || t.def == RimPipeDefOf.RimPipe_Dev_Reactor)
+			    || t.def == RimPipeDefOf.RimPipe_Dev_Reactor
+			    || IsBridgeHTargetDef(t.def))
 			{
 				t.Destroy();
 			}

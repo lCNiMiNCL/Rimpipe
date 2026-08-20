@@ -179,4 +179,27 @@ public static class RimPipeDebugTools
 		}
 		Log.Message(net.DebugVerifyLoopReconnect());
 	}
+	[DebugAction("RimPipe", "生成 Bridge-H 注入验收场景", false, false, false, false, false, 0, false,
+		actionType = DebugActionType.ToolMap,
+		allowedGameStates = AllowedGameStates.PlayingOnMap)]
+	private static void SpawnBridgeH()
+	{
+		Map map = Find.CurrentMap;
+		if (map == null)
+		{
+			return;
+		}
+		RimPipeDebugScenes.SpawnBridgeHScene(map, UI.MouseCell());
+	}
+
+	[DebugAction("RimPipe", "断言 Bridge-H 注入", false, false, false, false, false, 0, false,
+		actionType = DebugActionType.Action,
+		allowedGameStates = AllowedGameStates.PlayingOnMap)]
+	private static void AssertBridgeH()
+	{
+		RimPipeDebugAsserts.AssertBridgeHInjected();
+		RimPipeDebugAsserts.AssertBridgeHDamageBreach();
+		RimPipeDebugAsserts.AssertBridgeHBreakdownBreach();
+		RimPipeDebugAsserts.AssertBridgeHRepairClearsBreach();
+	}
 }

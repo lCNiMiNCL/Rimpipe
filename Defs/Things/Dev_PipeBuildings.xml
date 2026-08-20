@@ -422,4 +422,71 @@
     <terrainAffordanceNeeded>Light</terrainAffordanceNeeded>
   </ThingDef>
 
+
+  <!-- Bridge-H 自测目标：有 NetworkMember、无 Breachable；由注入 Def 动态补 CompPipeBreachable。 -->
+  <ThingDef ParentName="BuildingBase">
+    <defName>RimPipe_Dev_BridgeHTarget</defName>
+    <label>rimpipe 测试注入目标</label>
+    <description>Bridge-H 自测：只有 NetworkMember，没有 CompPipeBreachable；由 PipeBridgeInjectDef 在加载阶段注入破损能力。</description>
+    <thingClass>Building</thingClass>
+    <category>Building</category>
+    <graphicData>
+      <texPath>Things/Building/Linked/PowerConduit_MenuIcon</texPath>
+      <graphicClass>Graphic_Single</graphicClass>
+      <drawSize>(1,1)</drawSize>
+    </graphicData>
+    <uiIconPath>Things/Building/Linked/PowerConduit_MenuIcon</uiIconPath>
+    <altitudeLayer>Building</altitudeLayer>
+    <passability>PassThroughOnly</passability>
+    <pathCost>50</pathCost>
+    <fillPercent>0.4</fillPercent>
+    <rotatable>true</rotatable>
+    <statBases>
+      <MaxHitPoints>100</MaxHitPoints>
+      <WorkToBuild>10</WorkToBuild>
+      <Flammability>0.5</Flammability>
+    </statBases>
+    <size>(1,1)</size>
+    <costList>
+      <Steel>1</Steel>
+    </costList>
+    <building>
+      <isInert>true</isInert>
+    </building>
+    <comps>
+      <li Class="RimPipe.CompProperties_PipeNetworkMember">
+        <defaultMaxFlowRate>10</defaultMaxFlowRate>
+        <containers>
+          <li>
+            <capacity>100</capacity>
+            <fluidDefName>RimPipe_Fluid_TestWater</fluidDefName>
+            <initialAmount>0</initialAmount>
+          </li>
+        </containers>
+        <ports>
+          <li>
+            <localRot>North</localRot>
+            <containerIndex>0</containerIndex>
+          </li>
+          <li>
+            <localRot>South</localRot>
+            <containerIndex>0</containerIndex>
+          </li>
+          <li>
+            <localRot>West</localRot>
+            <containerIndex>0</containerIndex>
+          </li>
+          <li>
+            <localRot>East</localRot>
+            <containerIndex>0</containerIndex>
+          </li>
+        </ports>
+      </li>
+    </comps>
+    <!-- 不进建造菜单；仅 Debug / Bridge-H 回归用 -->
+    <uiOrder>1050</uiOrder>
+    <constructEffect>ConstructMetal</constructEffect>
+    <terrainAffordanceNeeded>Light</terrainAffordanceNeeded>
+  </ThingDef>
+
 </Defs>

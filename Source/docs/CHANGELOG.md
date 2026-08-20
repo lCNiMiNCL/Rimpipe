@@ -2,6 +2,13 @@
 
 > 版本记录主要面向下游模组与维护者。由原 `Source/RimPipe_API.md` 的版本短记整理。
 
+## 0.7.0
+- Bridge-H：新增 `PipeBridgeInjectDef`，可在加载阶段向目标 ThingDef 注入 `CompPipeBreachable`。
+- 新增 Harmony 前置：csproj 引用 `Source/Libs/0Harmony/0Harmony.dll`，About 声明 `brrainz.harmony` 依赖。
+- Dev：新增 `RimPipe_Dev_BridgeHTarget` 与 Bridge-H 注入场景/断言；`R-扩展` 增加 4 项，`R-全部` 变为 37 项。
+- 已游戏内验收：`R-扩展 6/6`、`R-全部 37/37`（Player.log · 2026-08-20）。
+- **新增下游 API：** `PipeBridgeInjectDef`；schema 仍 1。
+
 ## 0.6.0
 - 阶段 2 重构遗留处理：核心数据封装与死代码清理。
 - `Container` / `Mapping` / `Port` / `ChemReactorBinding` 的运行时字段改为只读属性，写操作收敛到 `internal`。

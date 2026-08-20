@@ -18,15 +18,15 @@
 - **物理：** 压力均分、路径阻力、破损泄漏与环境效果、热量与混温、环境散热、分网休眠
 - **化学：** `PipeReactionDef` + `CompPipeReactor`（或运行时 `TryRegisterChemReactor`）
 - **扩展：** `IPipeInternalMappingContributor`；`TrySetAmount` / `TrySetTemperature` / `TrySetBreached`
-- **破损桥接（Bridge）：** 伤害阈值 / Breakdown → 破损；修满血后可清除（无 Harmony）
+- **破损桥接（Bridge）：** Bridge-A 伤害阈值 / Breakdown → 破损，修满血后可清除（无 Harmony）；Bridge-H 可向已有 NetworkMember 的第三方建筑注入 Breachable（需 Harmony）
 
 **已锁定：** 管道格**不储存流体**——量只在设备/管件的 `Container` 里。
 
 ### 0.2 本版可依赖 vs 暂不建议依赖
 
-| 本版可依赖（0.5.x） | 延后 / 勿当稳定承诺 |
+| 本版可依赖（0.7.x） | 延后 / 勿当稳定承诺 |
 |--------------------|---------------------|
-| FluidDef；标准 NetworkMember / PipeCell / 阀·泵·换热器 / Reactor 的 XML Comp | Bridge-H（Harmony 强行注入、无引用也能挂） |
+| FluidDef；标准 NetworkMember / PipeCell / 阀·泵·换热器 / Reactor 的 XML Comp；`PipeBridgeInjectDef`（Bridge-H 无引用注入） | 正式建造栏反应釜产品化、B0 混管 |
 | `IPipeInternalMappingContributor`（**只**登记同建筑内部 Mapping） | DirtyTopo 等内部实现，不构成下游 API |
 | `TrySetAmount` / `TryAddAmount` / `TrySetTemperature` | 通用「把直接相邻外部边改成 Forced」API |
 | `TrySetBreached` / `TryGetBreached`；伤害/Breakdown 自动破损 | 正式建造栏反应釜产品化、B0 混管 |
@@ -63,6 +63,7 @@
 
 | 版本 | 要点 |
 |------|------|
+| **0.7.0** | Bridge-H：新增 `PipeBridgeInjectDef`，可向目标 ThingDef 注入 `CompPipeBreachable`；新增 Harmony 前置；Dev/R-扩展增加 Bridge-H 自测。**新增下游 API**；schema 仍 1 |
 | **0.6.0** | 阶段 2 重构遗留：核心数据类字段封装为只读属性，`CompPipeNetworkMember.Containers` / `Ports` 改为只读视图；删除 `ContainerDelta` 与 `ReevaluateSleepState()`。**API 变更**：核心数据字段从 public field 改为 read-only property；schema 仍 1 |
 | **0.5.1** | 6.19 管道 A/B 双通道（方向分组、端口 channel、Gizmo 逐向配置）；6.18 流体物理量（粘度→流动阻力、比热→传热）；工程与健壮性（partial 拆分、纯核抽取、单测+CI、R-全部、4.1-4.5 修复）。**无下游 API 变更**；schema 仍 1 |
 | **0.4.7** | DirtyTopo 局部脏区拓扑重建（放/拆管道不再整图重建）。**无下游 API 变更** |
@@ -258,7 +259,34 @@ net.TryGetBreached(thing, out bool breached);
 | `BroadcastCompSignal("Breakdown")`（官方 `CompBreakdownable`） | → `breached=true`（看 Props.`breachOnBreakdown`） |
 | 满血且当前没有 BrokenDown | MapComp 大约每 250 tick 清一次 `breached`（看 Props.`clearBreachOnRepaired`） |
 
-消费模组需要**引用** `rimpipe.core`。本版**不**提供「没引用也能硬挂」的 Harmony 方案（Bridge-H 延后）。
+#### Bridge-A（需要引用 RimPipe）
+
+消费模组需要**引用** `rimpipe.core`，在目标 ThingDef 的 `<comps>` 里直接挂 `CompProperties_PipeBreachable`，即可获得伤害 / Breakdown 自动破损。
+
+#### Bridge-H（无引用注入，需要 Harmony）
+
+如果目标建筑来自**停更 / 不引用 RimPipe** 的第三方模组，但它的 ThingDef 已经带 `CompPipeNetworkMember`，可以新增一个 `PipeBridgeInjectDef` 让 RimPipe 在加载阶段向该 ThingDef 注入 `CompPipeBreachable`：
+
+```xml
+<PipeBridgeInjectDef>
+  <defName>MyMod_BridgeInject</defName>
+  <targetThingDef>SomeThirdParty_StorageTank</targetThingDef>
+  <injectComps>
+    <li Class="RimPipe.CompProperties_PipeBreachable">
+      <breachBelowHitPointsPercent>0.5</breachBelowHitPointsPercent>
+      <clearBreachOnRepaired>true</clearBreachOnRepaired>
+      <breachOnBreakdown>true</breachOnBreakdown>
+    </li>
+  </injectComps>
+</PipeBridgeInjectDef>
+```
+
+规则：
+
+- 目标 Def 必须已带 `CompPipeNetworkMember`，否则跳过并 `Log.Warning`。
+- 目标 Def 不存在时也跳过并 `Log.Warning`。
+- 当前只注入 `CompPipeBreachable`；不做全 NetworkMember 模板注入。
+- 你的模组需要 `loadAfter` / 依赖 `rimpipe.core` 和 `brrainz.harmony`，但**不需要**引用 `RimPipe.dll` 来写这个注入 Def。
 
 ### 4.3 其它常用入口
 
@@ -269,13 +297,13 @@ net.TryGetBreached(thing, out bool breached);
 
 ---
 
-## 5. 能力边界（本版 0.6.0）
+## 5. 能力边界（本版 0.7.0）
 
 | 可以做 | 不要做 |
 |--------|--------|
 | 新 FluidDef / 新 ThingDef + 标准 Comp | 直接改流量公式，或绕过 Delta→Commit 改量 |
 | TrySet/AddAmount、TrySetTemperature | 指望跨建筑 Mapping 持久化进存档 |
-| TrySetBreached / TryGetBreached | Harmony 无引用硬贴（Bridge-H） |
+| TrySetBreached / TryGetBreached；`PipeBridgeInjectDef` 向第三方 Def 注入 Breachable | 注入非 Breachable 的通用 NetworkMember 模板（H2） |
 | 读 Mappings / ChemReactors / 休眠态 | 通用「直接相邻外部 Forced」API |
 | 挂 Breachable / 阀 / 泵 / 换热器 / **Reactor** | 真混合物 Container / 混管反应（B0） |
 | `PipeReactionDef` + Reactor 或 `TryRegisterChemReactor` | 用二元 `MappingType.Chemical` 做多入多出 |

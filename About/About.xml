@@ -4,9 +4,20 @@
 	<name>RimPipe</name>
 	<author>NewFrontierTeam</author>
 	<packageId>rimpipe.core</packageId>
-	<modVersion IgnoreIfNoMatchingField="True">0.6.0</modVersion>
+	<modVersion IgnoreIfNoMatchingField="True">0.7.0</modVersion>
+	<modDependencies>
+		<li>
+			<packageId>brrainz.harmony</packageId>
+			<displayName>Harmony</displayName>
+			<downloadUrl>https://github.com/pardeike/HarmonyRimWorld/releases/latest</downloadUrl>
+			<steamWorkshopUrl>steam://url/CommunityFilePage/2009463077</steamWorkshopUrl>
+		</li>
+	</modDependencies>
+	<loadAfter>
+		<li>brrainz.harmony</li>
+	</loadAfter>
 	<supportedVersions>
 		<li>1.6</li>
 	</supportedVersions>
-	<description>RimPipe 0.6.0：RimWorld 1.6 管道框架</description>
+	<description>RimPipe 0.7.0：RimWorld 1.6 管道框架</description>
 </ModMetaData>

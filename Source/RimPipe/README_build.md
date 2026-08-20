@@ -25,6 +25,7 @@
 | `Libs/Unity/UnityEngine.CoreModule.dll` | Unity 核心 |
 | `Libs/Unity/UnityEngine.IMGUIModule.dll` | IMGUI |
 | `Libs/Unity/UnityEngine.TextRenderingModule.dll` | 文字渲染 |
+| `Libs/0Harmony/0Harmony.dll` | Bridge-H 用（Harmony；`Private=false`，运行时不复制进输出目录） |
 
 游戏相关 DLL 从这里拷：
 
